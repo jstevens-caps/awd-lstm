@@ -11,7 +11,8 @@ from io import open
 import hashlib
 import argparse
 
-from transformers import WarmupLinearSchedule
+#from transformers import WarmupLinearSchedule
+from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
 from utils import count_parameters, get_loaders, drop_mult
 from data import Corpus, Dictionary
@@ -152,7 +153,8 @@ elif args.optimizer == 'adam':
     optimizer = optim.Adam(p_groups, lr=args.lr)
     steps = len(train_loader) * args.epochs
     if not args.no_warmup:
-        scheduler = WarmupLinearSchedule(optimizer, warmup_steps=int(steps * args.warmup_pct), t_total=steps)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(steps * args.warmup_pct), num_training_steps = steps)
+        #scheduler = WarmupLinearSchedule(optimizer, warmup_steps=int(steps * args.warmup_pct), t_total=steps)
 
 print("Optimization settings:")
 print(optimizer)
