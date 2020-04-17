@@ -236,6 +236,7 @@ try:
         model.eval()
         model.reset_hidden()
         valid_loss = 0
+        loss_LDA = 0
         for batch in tqdm(valid_loader):
             with torch.no_grad():
                 x, y = batch
@@ -243,9 +244,13 @@ try:
                 y = y.to(device)
 
                 out = model(x)
+                out, recon, loss_LDA = out
                 loss = criterion(out.view(-1, vocab_sz), y)
 
                 valid_loss += loss.item() 
+                valid_loss += loss_LDA #<-- add it here?
+                loss_LDA += loss_LDA
+        loss_LDA /= len(valid_loader)
         valid_loss /= len(valid_loader) 
         valid_losses.append(valid_loss) 
 
@@ -261,7 +266,7 @@ try:
                 optimizer.param_groups[0]['lr'] /= args.anneal_factor
         cur_lr = optimizer.param_groups[0]['lr']
 
-        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Loss {:.4f} | Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, np.exp(valid_loss), cur_lr))
+        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Total Loss {:.4f} | Valid LDA Loss {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, loss_LDA, np.exp(valid_loss), cur_lr))
 
 except KeyboardInterrupt:
     print("Exiting training early")
@@ -276,6 +281,7 @@ print("Evaluating model")
 model.eval()
 model.reset_hidden()
 test_loss = 0
+loss_LDA = 0
 for batch in tqdm(test_loader):
     with torch.no_grad():
         x, y = batch
@@ -288,7 +294,9 @@ for batch in tqdm(test_loader):
 
         test_loss += loss.item()
         test_loss += loss_LDA # <----- add it here?
+        loss_LDA += loss_LDA
 test_loss /= len(test_loader)
+loss_LDA /= len(test_loader)
 
 print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test LDA loss {:.4f}".format(test_loss, np.exp(test_loss), loss_LDA))
 
