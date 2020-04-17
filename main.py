@@ -67,6 +67,18 @@ parser.add_argument('--no_cuda', action='store_true', help='do not use CUDA')
 parser.add_argument('--gpu', type=int, default=0, help='index of GPU to use')
 parser.add_argument('--seed', type=int, default=42, help='random seed')
 
+parser.add_argument('-f', '--en1-units',        type=int,   default=100)
+parser.add_argument('-s', '--en2-units',        type=int,   default=100)
+parser.add_argument('-t', '--num-topic',        type=int,   default=50)
+# parser.add_argument('-b', '--batch-size',       type=int,   default=200)
+# parser.add_argument('-o', '--optimizer',        type=str,   default='Adam')
+# parser.add_argument('-r', '--learning-rate',    type=float, default=0.002)
+parser.add_argument('-m', '--momentum',         type=float, default=0.99)
+# parser.add_argument('-e', '--num-epoch',        type=int,   default=80)
+parser.add_argument('-q', '--init-mult',        type=float, default=1.0)    # multiplier in initialization of decoder weight
+parser.add_argument('-v', '--variance',         type=float, default=0.995)  # default variance in prior normal
+parser.add_argument('--start',                  action='store_true')        # start training at invocation
+
 args = parser.parse_args()
 print(args)
 
@@ -103,6 +115,10 @@ train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.u
 valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
 test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
+# Prepare arguments as input for encoder
+net_arch_LDA = args
+net_arch_LDA.num_input = vocab_sz   #Check if this is correct, maybe it needs to be train length or test length? 
+
 # Construct encoder
 if args.encoder == 'awd_lstm':
     encoder = AWDLSTMEncoder(vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim, 
@@ -114,7 +130,7 @@ elif args.encoder == 'lstm':
 
 # Construct decoder    
 if args.decoder == 'dropoutlinear':
-    decoder = DropoutLinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
+    decoder = DropoutLinearDecoder(net_arch_LDA, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
                                    vocab_sz=vocab_sz, out_dp=args.out_dp)
 elif args.decoder == 'linear':
     decoder = LinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, vocab_sz=vocab_sz)
@@ -191,14 +207,15 @@ try:
                 y = y.to(device)
 
                 out = model(x, return_states=True)
-                if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out = out
+                if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, recon, loss_LDA = out
                 raw_loss = criterion(out.view(-1, vocab_sz), y)
 
                 # AR/TAR
-                loss = raw_loss
+                loss = raw_loss #+ loss_LDA
                 if args.encoder == 'awd_lstm':
                     loss += args.alpha * dropped_out[-1].pow(2).mean()
                     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
+                loss += loss_LDA # <-- I think add it here, because alpha & beta are part of criterion
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -228,9 +245,9 @@ try:
                 out = model(x)
                 loss = criterion(out.view(-1, vocab_sz), y)
 
-                valid_loss += loss.item()
-        valid_loss /= len(valid_loader)
-        valid_losses.append(valid_loss)
+                valid_loss += loss.item() 
+        valid_loss /= len(valid_loader) 
+        valid_losses.append(valid_loss) 
 
         # Track and anneal LR
         if valid_loss < best_loss:
@@ -266,12 +283,16 @@ for batch in tqdm(test_loader):
         y = y.to(device)
 
         out = model(x)
-        loss = criterion(out.view(-1, vocab_sz), y)
+        out, recon, loss_LDA = out
+        loss = criterion(out.view(-1, vocab_sz), y) 
 
         test_loss += loss.item()
+        test_loss += loss_LDA # <----- add it here?
 test_loss /= len(test_loader)
 
-print("Test Loss {:.4f} | Test Ppl {:.4f}".format(test_loss, np.exp(test_loss)))
+print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test LDA loss {:.4f}".format(test_loss, np.exp(test_loss), loss_LDA))
+
+print("Recon Sample:", recon[0])
 
 # Saving graphs
 print("Saving loss data")
