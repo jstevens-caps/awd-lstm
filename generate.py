@@ -60,7 +60,7 @@ vocab_sz = len(word2idx)
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
-    encoder = AWDLSTMEncoder(args, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim, 
+    encoder = AWDLSTMEncoder(vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim, 
                              num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp, 
                              input_dp=args.input_dp, hidden_dp=args.hidden_dp, tie_weights=args.tie_weights)
 elif args.encoder == 'lstm':
@@ -69,7 +69,7 @@ elif args.encoder == 'lstm':
 
 # Construct decoder    
 if args.decoder == 'dropoutlinear':
-    decoder = DropoutLinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
+    decoder = DropoutLinearDecoder(args, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
                                    vocab_sz=vocab_sz, out_dp=args.out_dp)
 elif args.decoder == 'linear':
     decoder = LinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, vocab_sz=vocab_sz)
