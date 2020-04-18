@@ -262,7 +262,7 @@ class DropoutLinearDecoder(nn.Module):
         # TM
         self.combo_fc = nn.Linear(hidden_dim + hidden_dim, hidden_dim)      # SHOULD BE dim(p) + dim(hidden) -> 50??, <-- dimensions of this?
         
-    def forward(self, out, hidden, raw, dropped, p, p_no_drop, KL return_states=False, compute_loss=True, avg_loss=True):
+    def forward(self, out, hidden, raw, dropped, p, p_no_drop, KL, return_states=False, compute_loss=True, avg_loss=True):
         # Applies RNN Dropout on the RNN output and 
         # appends to the dropped_output list. Raw_output 
         # and dropped_output should have equal number of 
