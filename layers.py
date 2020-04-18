@@ -165,6 +165,7 @@ class AWDLSTMEncoder(nn.Module):
         #LDA IMPORT
         #def forward(self, input, compute_loss=False, avg_loss=True):        
         # compute posterior
+        print("out.size:", out.size())
         en1 = F.softplus(self.en1_fc(out))                              # en1_fc   output   
         en2 = F.softplus(self.en2_fc(en1))                              # encoder2 output 
         en2 = self.en2_drop(en2)
