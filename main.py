@@ -116,12 +116,12 @@ valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
 test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
 # Prepare arguments as input for encoder
-net_arch_LDA = args
-net_arch_LDA.num_input = vocab_sz   #Check if this is correct, maybe it needs to be train length or test length? 
+net_arch = args
+net_arch.num_input = vocab_sz   #Check if this is correct, maybe it needs to be train length or test length? 
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
-    encoder = AWDLSTMEncoder(vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim, 
+    encoder = AWDLSTMEncoder(net_arch, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim, 
                              num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp, 
                              input_dp=args.input_dp, hidden_dp=args.hidden_dp, tie_weights=args.tie_weights)
 elif args.encoder == 'lstm':
@@ -130,7 +130,7 @@ elif args.encoder == 'lstm':
 
 # Construct decoder    
 if args.decoder == 'dropoutlinear':
-    decoder = DropoutLinearDecoder(net_arch_LDA, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
+    decoder = DropoutLinearDecoder(net_arch, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
                                    vocab_sz=vocab_sz, out_dp=args.out_dp)
 elif args.decoder == 'linear':
     decoder = LinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, vocab_sz=vocab_sz)
@@ -207,7 +207,7 @@ try:
                 y = y.to(device)
 
                 out = model(x, return_states=True)
-                if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, recon, loss_LDA = out
+                if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
                 raw_loss = criterion(out.view(-1, vocab_sz), y)
 
                 # AR/TAR
@@ -215,7 +215,7 @@ try:
                 if args.encoder == 'awd_lstm':
                     loss += args.alpha * dropped_out[-1].pow(2).mean()
                     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
-                loss += loss_LDA # <-- I think add it here, because alpha & beta are part of criterion
+                loss += KL # <-- I think add it here, because alpha & beta are part of criterion
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -236,7 +236,7 @@ try:
         model.eval()
         model.reset_hidden()
         valid_loss = 0
-        loss_LDA = 0
+        loss_LDA = 0 # Old name, functions as KL
         for batch in tqdm(valid_loader):
             with torch.no_grad():
                 x, y = batch
@@ -244,12 +244,12 @@ try:
                 y = y.to(device)
 
                 out = model(x)
-                out, recon, loss_LDA = out
+                out, p, KL = out
                 loss = criterion(out.view(-1, vocab_sz), y)
 
                 valid_loss += loss.item() 
-                valid_loss += loss_LDA #<-- add it here?
-                loss_LDA += loss_LDA
+                valid_loss += KL #<-- add it here?
+                loss_LDA += KL
         loss_LDA /= len(valid_loader)
         valid_loss /= len(valid_loader) 
         valid_losses.append(valid_loss) 
@@ -266,7 +266,7 @@ try:
                 optimizer.param_groups[0]['lr'] /= args.anneal_factor
         cur_lr = optimizer.param_groups[0]['lr']
 
-        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Total Loss {:.4f} | Valid LDA Loss {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, loss_LDA, np.exp(valid_loss), cur_lr))
+        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Total Loss {:.4f} | Valid KL {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, loss_LDA, np.exp(valid_loss), cur_lr))
 
 except KeyboardInterrupt:
     print("Exiting training early")
@@ -281,7 +281,7 @@ print("Evaluating model")
 model.eval()
 model.reset_hidden()
 test_loss = 0
-loss_LDA = 0
+loss_LDA = 0 #again, = KL
 for batch in tqdm(test_loader):
     with torch.no_grad():
         x, y = batch
@@ -289,18 +289,17 @@ for batch in tqdm(test_loader):
         y = y.to(device)
 
         out = model(x)
-        out, recon, loss_LDA = out
+        out, p, KL = out
         loss = criterion(out.view(-1, vocab_sz), y) 
 
         test_loss += loss.item()
-        test_loss += loss_LDA # <----- add it here?
-        loss_LDA += loss_LDA
+        test_loss += KL # <----- add it here?
+        loss_LDA += KL
+        print("p sample from batch {:3}: {:.4f}".format(batch, p[0]))
 test_loss /= len(test_loader)
 loss_LDA /= len(test_loader)
 
-print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test LDA loss {:.4f}".format(test_loss, np.exp(test_loss), loss_LDA))
-
-print("Recon Sample:", recon[0])
+print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test KL {:.4f}".format(test_loss, np.exp(test_loss), loss_LDA))
 
 # Saving graphs
 print("Saving loss data")
