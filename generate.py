@@ -69,7 +69,7 @@ elif args.encoder == 'lstm':
 
 # Construct decoder    
 if args.decoder == 'dropoutlinear':
-    decoder = DropoutLinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
+    decoder = DropoutLinearDecoder(args, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
                                    vocab_sz=vocab_sz, out_dp=args.out_dp)
 elif args.decoder == 'linear':
     decoder = LinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, vocab_sz=vocab_sz)
