@@ -117,7 +117,7 @@ test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
 # Prepare arguments as input for encoder
 net_arch = args
-net_arch.num_input = vocab_sz   #Check if this is correct, maybe it needs to be train length or test length? 
+net_arch.num_input = len(corpus.train)   #Check if this is correct, maybe it needs to be train length or test length? 
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
