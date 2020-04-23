@@ -96,7 +96,7 @@ class AWDLSTMEncoder(nn.Module):
         # LDA IMPORT
         ac = net_arch_TM
         self.net_arch = net_arch_TM
-        self.en1_fc     = nn.Linear(hidden_dim, ac.en1_units)               # 1995 -> 100 <-- check inputs for this, hidden dim =  
+        self.en1_fc     = nn.Linear(ac.num_input, ac.en1_units)               # 1995 -> 100 <-- check inputs for this, hidden dim =  
         self.en2_fc     = nn.Linear(ac.en1_units, ac.en2_units)             # 100  -> 100 
         self.en2_drop   = nn.Dropout(0.2)
         self.mean_fc    = nn.Linear(ac.en2_units, ac.num_topic)             # 100  -> 50 
@@ -149,11 +149,12 @@ class AWDLSTMEncoder(nn.Module):
             self.cell = [repackage_hidden(h) for h in self.cell]
 
         out = self.emb_dp(x)
+        print("out.size 1:", out.size())
         
         raw_output = []
         dropped_output = []
         out = self.input_dp(out)
-
+        print("out.size 2:", out.size())
         for i in range(len(self.rnn)):
             out, (self.hidden[i], self.cell[i]) = self.weight_dp[i](out, (self.hidden[i], self.cell[i]))
             raw_output.append(out)
@@ -161,11 +162,11 @@ class AWDLSTMEncoder(nn.Module):
             if i < len(self.rnn) - 1: 
                 out = self.hidden_dp(out)
                 dropped_output.append(out)
-                
+            
         #LDA IMPORT
         #def forward(self, input, compute_loss=False, avg_loss=True):        
         # compute posterior
-        print("out.size:", out.size())
+        print("out.size :", out.size())
         en1 = F.softplus(self.en1_fc(out))                              # en1_fc   output   
         en2 = F.softplus(self.en2_fc(en1))                              # encoder2 output 
         en2 = self.en2_drop(en2)
