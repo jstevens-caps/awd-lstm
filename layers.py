@@ -96,7 +96,7 @@ class AWDLSTMEncoder(nn.Module):
         # LDA IMPORT
         ac = net_arch_TM
         self.net_arch = net_arch_TM
-        self.en1_fc     = nn.Linear(hidden_dim, ac.en1_units)               # 1995 -> 100 <-- check inputs for this, hidden dim =  
+        self.en1_fc     = nn.Linear(ac.num_input, ac.en1_units)               # 1995 -> 100 <-- check inputs for this, hidden dim =  
         self.en2_fc     = nn.Linear(ac.en1_units, ac.en2_units)             # 100  -> 100 
         self.en2_drop   = nn.Dropout(0.2)
         self.mean_fc    = nn.Linear(ac.en2_units, ac.num_topic)             # 100  -> 50 
