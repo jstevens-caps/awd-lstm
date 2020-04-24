@@ -168,6 +168,7 @@ class AWDLSTMEncoder(nn.Module):
         # compute posterior
         print("out.size :", out.size())
         en1 = F.softplus(self.en1_fc(out))                              # en1_fc   output   
+        print("en1.size :", en1.size())
         en2 = F.softplus(self.en2_fc(en1))                              # encoder2 output 
         en2 = self.en2_drop(en2)
         posterior_mean   = self.mean_bn  (self.mean_fc  (en2))          # posterior mean
