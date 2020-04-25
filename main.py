@@ -24,8 +24,8 @@ parser.add_argument('--valid', type=str, default='wiki.valid.tokens', help='name
 parser.add_argument('--test', type=str, default='wiki.test.tokens', help='name of the testing corpus')
 parser.add_argument('--output', type=str, default='awd_lstm', help='output name')
 
-parser.add_argument('--bs', type=int, default=40, help='batch size')
-parser.add_argument('--eval_bs', type=int, default=40, help='evaluation batch size')
+parser.add_argument('--bs', type=int, default=80, help='batch size')
+parser.add_argument('--eval_bs', type=int, default=80, help='evaluation batch size')
 parser.add_argument('--bptt', type=int, default=80, help='bptt length')
 parser.add_argument('--use_var_bptt', action='store_true', help='use variable length bptt')
 parser.add_argument('--rebuild_dataset', action='store_true', help='force rebuild the dataset')
@@ -80,7 +80,10 @@ parser.add_argument('-v', '--variance',         type=float, default=0.995)  # de
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
 
 args = parser.parse_args()
-print(args)
+print("arguments :", args)
+print("bs", args.bs)
+print("eval_bs", args.eval_bs)
+print("bptt", args.bptt)
 
 if args.decoder == 'dropoutlinear': assert args.encoder == 'awd_lstm'
 
@@ -168,7 +171,7 @@ optimizer, scheduler = None, None
 if args.optimizer == 'sgd':
     optimizer = optim.SGD(p_groups, lr=args.lr)
 elif args.optimizer == 'adam':
-    optimizer = optim.Adam(p_groups, lr=args.lr)
+    optimizer = optim.Adam(p_groups, lr=1e-3)
     steps = len(train_loader) * args.epochs
     if not args.no_warmup:
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(steps * args.warmup_pct), num_training_steps = steps)
@@ -223,10 +226,11 @@ try:
                 loss = raw_loss #+ loss_LDA
                 #print("raw_loss_size", raw_loss.size())
                 if args.encoder == 'awd_lstm':
+                    print("dropped_out.size", len(dropped_out))
                     loss += args.alpha * dropped_out[-1].pow(2).mean()
                     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
                 loss += KL.sum() # <-- I think add it here, because alpha & beta are part of criterion
-
+                print("Train KL", KL.sum())
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), args.clip)
@@ -257,6 +261,7 @@ try:
 
                 out = model(x)
                 out, p, KL = out
+                print("KL val:", KL.sum())
                 # print("size of out", out.size())
                 loss = criterion(out.view(-1, vocab_sz), y) + KL.sum()
 
@@ -302,6 +307,7 @@ for batch in tqdm(test_loader):
         out = model(x)
         out, p, KL = out
         KL = KL.sum()
+        print("KL test:", KL)
         loss = criterion(out.view(-1, vocab_sz), y) + KL
         KLD += KL
 
