@@ -24,8 +24,8 @@ parser.add_argument('--valid', type=str, default='wiki.valid.tokens', help='name
 parser.add_argument('--test', type=str, default='wiki.test.tokens', help='name of the testing corpus')
 parser.add_argument('--output', type=str, default='awd_lstm', help='output name')
 
-parser.add_argument('--bs', type=int, default=80, help='batch size')
-parser.add_argument('--eval_bs', type=int, default=80, help='evaluation batch size')
+parser.add_argument('--bs', type=int, default=40, help='batch size')
+parser.add_argument('--eval_bs', type=int, default=40, help='evaluation batch size')
 parser.add_argument('--bptt', type=int, default=80, help='bptt length')
 parser.add_argument('--use_var_bptt', action='store_true', help='use variable length bptt')
 parser.add_argument('--rebuild_dataset', action='store_true', help='force rebuild the dataset')
