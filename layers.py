@@ -100,14 +100,15 @@ class AWDLSTMEncoder(nn.Module):
         self.en2_fc     = nn.Linear(ac.en1_units, ac.en2_units)             # 100  -> 100
         self.en2_drop   = nn.Dropout(0.2)
         self.mean_fc    = nn.Linear(ac.en2_units, ac.num_topic)             # 100  -> 50
-        self.mean_bn    = nn.BatchNorm1d(80)                      # bn for mean   LINE 20
+        self.mean_bn    = nn.BatchNorm1d(ac.bs)                      # bn for mean   LINE 20  was 80 by default, then changed bs
         self.logvar_fc  = nn.Linear(ac.en2_units, ac.num_topic)             # 100  -> 50
-        self.logvar_bn  = nn.BatchNorm1d(80)                      # bn for logvar
+        self.logvar_bn  = nn.BatchNorm1d(ac.bs)                      # bn for logvar  also 80
          # decoder
         # self.decoder    = nn.Linear(ac.num_topic, ac.num_input)             # 50   -> 1995   #DECODER OF TOPIC MODEL
         # self.decoder_bn = nn.BatchNorm1d(ac.num_input)                      # bn for decoder
         self.p_drop     = nn.Dropout(0.2)
-
+        self.softmax_p  = nn.Softmax()
+        
         # prior mean and variance as constant buffers
         #prior_mean   = torch.Tensor(1, ac.num_topic).fill_(0)
         self.prior_mean   = nn.Parameter(torch.zeros((1, ac.num_topic)), requires_grad=False).cuda()
@@ -185,7 +186,7 @@ class AWDLSTMEncoder(nn.Module):
         #eps = Variable(input.data.new().resize_as_(posterior_mean.data).normal_()) # noise
         eps = torch.randn_like(posterior_var)
         z = posterior_mean + posterior_var.sqrt() * eps                 # reparameterization
-        p_no_drop = nn.softmax(z)                                       # mixture probability
+        p_no_drop = self.softmax_p(z)                                   # mixture probability
         p = self.p_drop(p_no_drop)
 
         # do reconstruction
