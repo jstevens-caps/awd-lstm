@@ -107,7 +107,7 @@ class AWDLSTMEncoder(nn.Module):
         # self.decoder    = nn.Linear(ac.num_topic, ac.num_input)             # 50   -> 1995   #DECODER OF TOPIC MODEL
         # self.decoder_bn = nn.BatchNorm1d(ac.num_input)                      # bn for decoder
         self.p_drop     = nn.Dropout(0.2)
-        self.softmax_p  = nn.Softmax()
+        self.softmax_p  = nn.Softmax(dim=-1)  # softmax over the topics
         
         # prior mean and variance as constant buffers
         #prior_mean   = torch.Tensor(1, ac.num_topic).fill_(0)
@@ -186,6 +186,7 @@ class AWDLSTMEncoder(nn.Module):
         #eps = Variable(input.data.new().resize_as_(posterior_mean.data).normal_()) # noise
         eps = torch.randn_like(posterior_var)
         z = posterior_mean + posterior_var.sqrt() * eps                 # reparameterization
+        # print("z.size", z.size())
         p_no_drop = self.softmax_p(z)                                   # mixture probability
         p = self.p_drop(p_no_drop)
 
