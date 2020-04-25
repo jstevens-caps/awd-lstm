@@ -25,7 +25,7 @@ parser.add_argument('--test', type=str, default='wiki.test.tokens', help='name o
 parser.add_argument('--output', type=str, default='awd_lstm', help='output name')
 
 parser.add_argument('--bs', type=int, default=80, help='batch size')
-parser.add_argument('--eval_bs', type=int, default=10, help='evaluation batch size')
+parser.add_argument('--eval_bs', type=int, default=80, help='evaluation batch size')
 parser.add_argument('--bptt', type=int, default=80, help='bptt length')
 parser.add_argument('--use_var_bptt', action='store_true', help='use variable length bptt')
 parser.add_argument('--rebuild_dataset', action='store_true', help='force rebuild the dataset')
@@ -107,7 +107,7 @@ else:
     if args.save_vocab:
         with open('{}/{}'.format(path, args.vocab_file), 'wb') as f:
             torch.save([corpus.dictionary.word2idx, corpus.dictionary.idx2word], f)
-    
+
 vocab_sz = len(corpus.dictionary)
 
 # Produce dataloaders
@@ -117,25 +117,26 @@ test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
 # Prepare arguments as input for encoder
 net_arch = args
-net_arch.num_input = 5920   #Check if this is correct, maybe it needs to be train length or test length? 
+net_arch.num_input = 5920   #Check if this is correct, maybe it needs to be train length or test length?
 print("vocab_size:", vocab_sz)
+net_arch.device_tn = device
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
-    encoder = AWDLSTMEncoder(net_arch, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim, 
-                             num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp, 
+    encoder = AWDLSTMEncoder(net_arch, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
+                             num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp,
                              input_dp=args.input_dp, hidden_dp=args.hidden_dp, tie_weights=args.tie_weights)
 elif args.encoder == 'lstm':
-    encoder = LSTMEncoder(vocab_sz=vocab_sz, emb_dim=args.emb_dim, num_layers=args.num_layers, 
+    encoder = LSTMEncoder(vocab_sz=vocab_sz, emb_dim=args.emb_dim, num_layers=args.num_layers,
                           hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, dropout=args.weight_dp)
 
-# Construct decoder    
+# Construct decoder
 if args.decoder == 'dropoutlinear':
-    decoder = DropoutLinearDecoder(net_arch, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, 
+    decoder = DropoutLinearDecoder(net_arch, hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim,
                                    vocab_sz=vocab_sz, out_dp=args.out_dp)
 elif args.decoder == 'linear':
     decoder = LinearDecoder(hidden_dim=args.emb_dim if args.tie_weights else args.hidden_dim, vocab_sz=vocab_sz)
-    
+
 # Produce model
 model = RNNModel(encoder, decoder, tie_weights=args.tie_weights, initrange=args.initrange)
 model = drop_mult(model, dm=args.dm)
@@ -150,7 +151,7 @@ if args.use_pretrained:
     with open('{}/{}'.format(path, args.pretrained_file), 'rb') as f:
         inc = model.load_state_dict(torch.load(f, map_location=device), strict=False)
     print(inc)
-    
+
 model = model.to(device);
 
 # Parameter groups
@@ -206,17 +207,25 @@ try:
 
                 x = x.to(device)
                 y = y.to(device)
+                #x = torch.transpose(x, 0, 1)
+
+                # print("size of x", x.size())
+                # print("size of y", y.size())
 
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
+                # print("size of out", out.size())
                 raw_loss = criterion(out.view(-1, vocab_sz), y)
-
+                # print("size of y", y.size())
+                # print("out.view", out.view(-1, vocab_sz).size())
+                # print("raw_loss", raw_loss)
                 # AR/TAR
                 loss = raw_loss #+ loss_LDA
+                #print("raw_loss_size", raw_loss.size())
                 if args.encoder == 'awd_lstm':
                     loss += args.alpha * dropped_out[-1].pow(2).mean()
                     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
-                loss += KL # <-- I think add it here, because alpha & beta are part of criterion
+                loss += KL.sum() # <-- I think add it here, because alpha & beta are part of criterion
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -230,30 +239,31 @@ try:
                     optimizer.param_groups[0]['lr'] = args.lr
 
                 t.update()
-                train_loss += raw_loss.item()
+                train_loss += loss.item()
         train_loss /= len(train_loader)
         train_losses.append(train_loss)
 
         model.eval()
         model.reset_hidden()
         valid_loss = 0
-        loss_LDA = 0 # Old name, functions as KL
+        KLD = 0
         for batch in tqdm(valid_loader):
             with torch.no_grad():
                 x, y = batch
                 x = x.to(device)
                 y = y.to(device)
+                # print("size of x", x.size())
+                # print("size of y", y.size())
 
                 out = model(x)
                 out, p, KL = out
-                loss = criterion(out.view(-1, vocab_sz), y)
+                # print("size of out", out.size())
+                loss = criterion(out.view(-1, vocab_sz), y) + KL.sum()
 
-                valid_loss += loss.item() 
-                valid_loss += KL #<-- add it here?
-                loss_LDA += KL
-        loss_LDA /= len(valid_loader)
-        valid_loss /= len(valid_loader) 
-        valid_losses.append(valid_loss) 
+                valid_loss += loss.item()
+                KLD += KL.sum()
+        valid_loss /= len(valid_loader)
+        valid_losses.append(valid_loss)
 
         # Track and anneal LR
         if valid_loss < best_loss:
@@ -267,7 +277,7 @@ try:
                 optimizer.param_groups[0]['lr'] /= args.anneal_factor
         cur_lr = optimizer.param_groups[0]['lr']
 
-        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Total Loss {:.4f} | Valid KL {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, loss_LDA, np.exp(valid_loss), cur_lr))
+        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Total Loss {:.4f} | Valid KL {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, KLD, np.exp(valid_loss), cur_lr))
 
 except KeyboardInterrupt:
     print("Exiting training early")
@@ -282,7 +292,7 @@ print("Evaluating model")
 model.eval()
 model.reset_hidden()
 test_loss = 0
-loss_LDA = 0 #again, = KL
+KLD = 0 #again, = KL
 for batch in tqdm(test_loader):
     with torch.no_grad():
         x, y = batch
@@ -291,16 +301,15 @@ for batch in tqdm(test_loader):
 
         out = model(x)
         out, p, KL = out
-        loss = criterion(out.view(-1, vocab_sz), y) 
+        KL = KL.sum()
+        loss = criterion(out.view(-1, vocab_sz), y) + KL
+        KLD += KL
 
         test_loss += loss.item()
-        test_loss += KL # <----- add it here?
-        loss_LDA += KL
-        print("p sample from batch {:3}: {:.4f}".format(batch, p[0]))
+        #print("p sample from batch {:3}: {:.4f}".format(batch, p[0]))
 test_loss /= len(test_loader)
-loss_LDA /= len(test_loader)
 
-print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test KL {:.4f}".format(test_loss, np.exp(test_loss), loss_LDA))
+print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test KL {:.4f}".format(test_loss, np.exp(test_loss), KLD))
 
 # Saving graphs
 print("Saving loss data")
