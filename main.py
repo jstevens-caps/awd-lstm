@@ -226,11 +226,11 @@ try:
                 loss = raw_loss #+ loss_LDA
                 #print("raw_loss_size", raw_loss.size())
                 if args.encoder == 'awd_lstm':
-                    print("dropped_out.size", len(dropped_out))
+                    # print("dropped_out.size", len(dropped_out))
                     loss += args.alpha * dropped_out[-1].pow(2).mean()
                     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
                 loss += KL.sum() # <-- I think add it here, because alpha & beta are part of criterion
-                print("Train KL", KL.sum())
+                # print("Train KL", KL.sum())
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), args.clip)
@@ -261,7 +261,7 @@ try:
 
                 out = model(x)
                 out, p, KL = out
-                print("KL val:", KL.sum())
+                # print("KL val:", KL.sum())
                 # print("size of out", out.size())
                 loss = criterion(out.view(-1, vocab_sz), y) + KL.sum()
 
@@ -307,7 +307,7 @@ for batch in tqdm(test_loader):
         out = model(x)
         out, p, KL = out
         KL = KL.sum()
-        print("KL test:", KL)
+        # print("KL test:", KL)
         loss = criterion(out.view(-1, vocab_sz), y) + KL
         KLD += KL
 
