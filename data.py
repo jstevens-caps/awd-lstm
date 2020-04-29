@@ -205,7 +205,8 @@ class Corpus_tok(object):
                             self.y.append(' '.join(labels))
                       sentence = []
                       labels = []
-         return data, y
+         
+        return data, y
 
     def __len__(self):
         # overide len to get number of instances
