@@ -14,8 +14,8 @@ import argparse
 #from transformers import WarmupLinearSchedule
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
-from utils import count_parameters, get_loaders, drop_mult
-from data import Corpus, Dictionary
+from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult
+from data import Corpus, Corpus_tok, Dictionary
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--path', type=str, default='../data/wikitext-2', help='location of the data corpus')
