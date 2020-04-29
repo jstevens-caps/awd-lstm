@@ -110,7 +110,7 @@ class Dictionary(object):
     def __len__(self):
         return len(self.idx2word)
     
-     def from_data(input_files): 
+    def from_data(input_files): 
         # Load unique words from data
         vocab = Dictionary() 
         for input_file in input_files: 
