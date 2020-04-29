@@ -78,7 +78,7 @@ parser.add_argument('-m', '--momentum',         type=float, default=0.99)
 parser.add_argument('-q', '--init-mult',        type=float, default=1.0)    # multiplier in initialization of decoder weight
 parser.add_argument('-v', '--variance',         type=float, default=0.995)  # default variance in prior normal
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
-parser.add_argument('--tokenized',              action='store_true')        # whether the input files are allready tokenized
+parser.add_argument('--tokenized',  type=bool, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
 
 args = parser.parse_args()
 
