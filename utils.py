@@ -18,6 +18,75 @@ def get_batch(source, i, bptt):
     target = source[i+1:i+1+seq_len].view(-1)
     return data, target
 
+def create_batch(data, vocab, tag2id, device, word_dropout=0.):
+    """
+    Converts a list of sentences to a padded batch of word ids. Returns
+    an input batch, output tags, a sequence mask over
+    the input batch, and a tensor containing the sequence length of each
+    batch element.
+    :param sentences: a list of sentences, each a list of token ids
+    :param labels: a list of outputs
+    :param vocab: a Vocabulary object for this dataset
+    :param device: 
+    :param word_dropout: rate at which we omit words from the context (input)
+    Notice we do not use word dropout (forget words from a vocabulary) but sequence dropout (forget words in a sentence)
+    :returns: a batch of padded inputs, a batch of outputs, mask, lengths
+    """
+    # we get the max lenght sentence in a mini-batch to create the padding
+    sentences, labels = data
+    tok = np.array([sen.split() for sen in sentences])
+    seq_lengths = [len(sen) for sen in tok]
+    max_len = max(seq_lengths)
+    pad_id = vocab["<pad>"]  #pad token
+    # padding of the sentences that a sorther than the max with 0
+    pad_id_input = [
+        [vocab[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
+            for idx, sen in enumerate(tok)]
+    # we do the same for the labels
+    tags = np.array([l.split() for l in labels])
+    pad_id_output = [
+        [tag2id[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
+            for idx, sen in enumerate(tags)]
+    
+    
+    # Convert everything to PyTorch tensors
+    batch_input = torch.tensor(pad_id_input)
+    batch_output = torch.tensor(pad_id_output)
+    # define sequence mask to know what is a word and what is padding
+    # this is used to mask the loss and we do not end up taking into account empty sequences
+    seq_mask = (batch_input != vocab[PAD_TOKEN])
+    seq_length = torch.tensor(seq_lengths)
+    
+    # Move all tensors to the given device 
+    batch_input = batch_input.to(device) 
+    batch_output = batch_output.to(device) 
+    seq_mask = seq_mask.to(device) 
+    seq_length = seq_length.to(device) 
+    
+    return batch_input, batch_output, seq_mask, seq_length 
+
+def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., use_var_bptt=False): 
+    # sentences, labels = source 
+    data = batchify(source, bs)
+    loader = []
+    
+    i = 0
+    while i < data.size(0) - 2:
+        if use_var_bptt:
+            rand_bptt = bptt if np.random.random() < 0.95 else bptt / 2. 
+            seq_len = max(5, int(np.random.normal(rand_bptt, 5))) 
+        else:
+            seq_len = bptt
+        
+        #batch = get_batch(data, i, seq_len)
+        # sentences, labels = data
+        batch = create_batch(data, vocab, tag2id, device, word_dropout=0.)
+        loader.append(batch)   # batch = x, y, seq_mask, seq_length
+        
+        i += seq_len
+    
+    return loader
+
 def get_loaders(source, bs, bptt, use_var_bptt=False):
     data = batchify(source, bs)
     loader = []
