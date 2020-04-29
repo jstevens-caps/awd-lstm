@@ -141,9 +141,9 @@ class Corpus_tok(object):
             self.dictionary.vocab_set = set(idx2word)
 
         # This self.train/valid/test now consist of (sentences, labels), sentences split by newlines 
-        self.train = make_los(os.path.join(path, train_file), skip_dict=load_vocab, max_len=max_sen_len) 
-        self.valid = make_los(os.path.join(path, valid_file), skip_dict=load_vocab,  max_len=max_sen_len) 
-        self.test  = make_los(os.path.join(path, test_file), skip_dict=load_vocab, max_len=max_sen_len)
+        self.train = self.make_los(os.path.join(path, train_file), skip_dict=load_vocab, max_len=max_sen_len) 
+        self.valid = self.make_los(os.path.join(path, valid_file), skip_dict=load_vocab,  max_len=max_sen_len) 
+        self.test  = self.make_los(os.path.join(path, test_file), skip_dict=load_vocab, max_len=max_sen_len)
 #         self.train = self.tokenize(os.path.join(path, train_file), skip_dict=load_vocab)
 #         self.valid = self.tokenize(os.path.join(path, valid_file), skip_dict=load_vocab)
 #         self.test = self.tokenize(os.path.join(path, test_file), skip_dict=load_vocab)
