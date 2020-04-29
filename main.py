@@ -78,15 +78,15 @@ parser.add_argument('-m', '--momentum',         type=float, default=0.99)
 parser.add_argument('-q', '--init-mult',        type=float, default=1.0)    # multiplier in initialization of decoder weight
 parser.add_argument('-v', '--variance',         type=float, default=0.995)  # default variance in prior normal
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
+parser.add_argument('--tokenized',              action='store_true')        # whether the input files are allready tokenized
 
 args = parser.parse_args()
-print("arguments :", args)
-print("bs", args.bs)
-print("eval_bs", args.eval_bs)
-print("bptt", args.bptt)
 
 if args.decoder == 'dropoutlinear': assert args.encoder == 'awd_lstm'
 
+#tag_ids = {'B':0, 'I':1, 'O':2}
+tag_ids = {'B-MISC':0, 'I-MISC':1, 'B-LOC':2, 'I-LOC':3, 'B-PER':4, 'I-PER':5, 'B-ORG':6, 'I-ORG':7, 'O':8}
+    
 # CUDA
 device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and not args.no_cuda else 'cpu')
 np.random.seed(args.seed)
@@ -105,23 +105,31 @@ else:
     print('Producing dataset...')
     if args.load_vocab:
         print('Vocabulary has been loaded from {}'.format(args.vocab_file))
-    corpus = Corpus(path, args.train, args.valid, args.test, load_vocab=args.load_vocab, vocab_file=args.vocab_file)
+    if args.tokenized:
+        corpus = Corpus_tok(path, args.train, args.valid, args.test, load_vocab=args.load_vocab, vocab_file=args.vocab_file)
+    else: 
+        corpus = Corpus(path, args.train, args.valid, args.test, load_vocab=args.load_vocab, vocab_file=args.vocab_file)
     torch.save(corpus, fn)
     if args.save_vocab:
         with open('{}/{}'.format(path, args.vocab_file), 'wb') as f:
             torch.save([corpus.dictionary.word2idx, corpus.dictionary.idx2word], f)
 
-vocab_sz = len(corpus.dictionary)
+vocab_sz = len(corpus.dictionary)  
 
 # Produce dataloaders
-train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
-valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
-test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
+if args.tokenized:
+    train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0., use_var_bptt=args.use_var_bptt)
+    valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0.)
+    test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0.)
+else:
+    train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
+    valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
+    test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
 # Prepare arguments as input for encoder
 net_arch = args
-net_arch.num_input = 5920   #Check if this is correct, maybe it needs to be train length or test length?
-print("vocab_size:", vocab_sz)
+net_arch.num_input = 5920  
+# print("vocab_size:", vocab_sz)
 net_arch.device_tn = device
 
 # Construct encoder
@@ -197,7 +205,7 @@ try:
         train_loss = 0
         with tqdm(total=len(train_loader)) as t:
             for batch in train_loader:
-                x, y = batch
+                x, y, seq_mask, seq_length = batch
 
                 # Scale learning rate to sequence length
                 if args.use_var_bptt and not args.no_lr_scaling:
@@ -253,7 +261,7 @@ try:
         KLD = 0
         for batch in tqdm(valid_loader):
             with torch.no_grad():
-                x, y = batch
+                x, y, seq_mask, seq_length = batch
                 x = x.to(device)
                 y = y.to(device)
                 # print("size of x", x.size())
@@ -298,9 +306,9 @@ model.eval()
 model.reset_hidden()
 test_loss = 0
 KLD = 0 #again, = KL
-for batch in tqdm(test_loader):
-    with torch.no_grad():
-        x, y = batch
+for batch in tqdm(test_loader): 
+    with torch.no_grad(): 
+        x, y, seq_mask, seq_length = batch 
         x = x.to(device)
         y = y.to(device)
 
