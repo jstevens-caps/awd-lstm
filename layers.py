@@ -284,8 +284,8 @@ class DropoutLinearDecoder(nn.Module):
         # appends to the dropped_output list. Raw_output
         # and dropped_output should have equal number of
         # elements now
-        # out = self.out_dp(out)
-        # dropped.append(out)                  # this is relevant for dropped, check if that is oke <-- what should happen with drop?
+        out = self.out_dp(out)
+        dropped.append(out)                  # this is relevant for dropped, check if that is oke <-- what should happen with drop?
 
         # print("hidden_shape", hidden[-1].size())
         # print("hidden_len", len(hidden))
@@ -293,7 +293,7 @@ class DropoutLinearDecoder(nn.Module):
         hidden_rp = hidden[-1]
         hidden_rp = hidden_rp.repeat(msl, 1, 1)
         # print("hidden_size", hidden_rp.size())
-        combo = torch.cat((p, hidden_rp), dim=2)  # over the topic dimensions
+        combo = torch.cat((p, out), dim=2)  # over the topic dimensions
         combo = self.combo_fc(combo)         # check dimensions of this
         out = self.fc1(combo)
 
