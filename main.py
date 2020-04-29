@@ -229,7 +229,7 @@ try:
                     # print("dropped_out.size", len(dropped_out))
                     loss += args.alpha * dropped_out[-1].pow(2).mean()
                     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
-                loss += KL.sum() # <-- I think add it here, because alpha & beta are part of criterion
+                loss -= KL.sum() # <-- I think add it here, because alpha & beta are part of criterion
                 # print("Train KL", KL.sum())
                 optimizer.zero_grad()
                 loss.backward()
@@ -263,7 +263,7 @@ try:
                 out, p, KL = out
                 # print("KL val:", KL.sum())
                 # print("size of out", out.size())
-                loss = criterion(out.view(-1, vocab_sz), y) + KL.sum()
+                loss = criterion(out.view(-1, vocab_sz), y) - KL.sum()
 
                 valid_loss += loss.item()
                 KLD += KL.sum()
@@ -308,7 +308,7 @@ for batch in tqdm(test_loader):
         out, p, KL = out
         KL = KL.sum()
         # print("KL test:", KL)
-        loss = criterion(out.view(-1, vocab_sz), y) + KL
+        loss = criterion(out.view(-1, vocab_sz), y) - KL
         KLD += KL
 
         test_loss += loss.item()
