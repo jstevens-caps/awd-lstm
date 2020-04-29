@@ -1,6 +1,7 @@
 import os   
 from io import open   
 import torch   
+from torch.utils.data import Dataset
 
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
