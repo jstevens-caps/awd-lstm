@@ -276,7 +276,7 @@ class DropoutLinearDecoder(nn.Module):
         # TM
         self.combo_fc = nn.Linear(ac.emb_dim + ac.num_topic, hidden_dim)      # SHOULD BE dim(p) + dim(hidden) -> 50??, <-- dimensions of this?
         self.fc1 = nn.Linear(hidden_dim, vocab_sz)
-        # self.out_dp = RNNDropout(out_dp)
+        self.out_dp = RNNDropout(out_dp)
 
 
     def forward(self, out, hidden, raw, dropped, p, p_no_drop, KL, msl, return_states=False, compute_loss=True, avg_loss=True):
