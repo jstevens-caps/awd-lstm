@@ -81,7 +81,7 @@ class AWDLSTMEncoder(nn.Module):
     """
     AWD-LSTM Encoder as proposed by Merity et al. (2017)
     """
-    def __init__(self, net_arch_TM, vocab_sz, emb_dim, hidden_dim, num_layers=1, emb_dp=0.1, weight_dp=0.5, input_dp=0.3, hidden_dp=0.3, tie_weights=True, padding_idx=1):
+    def __init__(self, net_arch_TM, vocab_sz, emb_dim, hidden_dim, anneal_KL=True, anneal_KL_margin=0.1, num_layers=1, emb_dp=0.1, weight_dp=0.5, input_dp=0.3, hidden_dp=0.3, tie_weights=True, padding_idx=1):
         super(AWDLSTMEncoder, self).__init__()
         self.embeddings = nn.Embedding(vocab_sz, emb_dim, padding_idx=padding_idx)
         self.emb_dp = EmbeddingDropout(self.embeddings, emb_dp)
@@ -90,9 +90,12 @@ class AWDLSTMEncoder(nn.Module):
         self.weight_dp = nn.ModuleList([WeightDropout(rnn, weight_dp) for rnn in self.rnn])
         self.hidden_dp = RNNDropout(hidden_dp)
         self.input_dp = RNNDropout(input_dp)
-
+        
         self.hidden, self.cell = None, None
-
+        
+        self.anneal_KL = anneal_KL
+        self.margin = anneal_KL_margin
+        
         # LDA IMPORT
         ac = net_arch_TM
         self.net_arch = net_arch_TM
@@ -193,6 +196,9 @@ class AWDLSTMEncoder(nn.Module):
         # do reconstruction
         #recon = F.softmax(self.decoder_bn(self.decoder(p)))         # reconstructed distribution over vocabulary  LINE 59 DECODER OF LANGUAGE MODEL
         KL = self.KLD(posterior_mean, posterior_logvar, posterior_var)
+        if self.anneal_KL:
+            KL = torch.max(KL, torch.ones_like(KL) * self.margin)             
+        
         #END IMPORT
 
         # out is the final processed RNN output
