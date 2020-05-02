@@ -78,7 +78,7 @@ parser.add_argument('-m', '--momentum',         type=float, default=0.99)
 parser.add_argument('-q', '--init-mult',        type=float, default=1.0)    # multiplier in initialization of decoder weight
 parser.add_argument('-v', '--variance',         type=float, default=0.995)  # default variance in prior normal
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
-parser.add_argument('--tokenized',  type=bool, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
+parser.add_argument('--tokenized',  type=int, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
 
 args = parser.parse_args()
 
@@ -105,7 +105,7 @@ else:
     print('Producing dataset...')
     if args.load_vocab:
         print('Vocabulary has been loaded from {}'.format(args.vocab_file))
-    if args.tokenized:
+    if args.tokenized == 1:
         corpus = Corpus_tok(path, args.train, args.valid, args.test, load_vocab=args.load_vocab, vocab_file=args.vocab_file)
     else: 
         corpus = Corpus(path, args.train, args.valid, args.test, load_vocab=args.load_vocab, vocab_file=args.vocab_file)
@@ -117,7 +117,7 @@ else:
 vocab_sz = len(corpus.dictionary)  
 
 # Produce dataloaders
-if args.tokenized:
+if args.tokenized == 1:
     train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0., use_var_bptt=args.use_var_bptt)
     valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0.)
     test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0.)
@@ -199,20 +199,24 @@ valid_losses = []
 # Training!
 print("Beginning training")
 try:
+    num_batch = 0
+    num_words = 0 
     for e in range(1, args.epochs + 1):
         model.train()
         model.reset_hidden()
         train_loss = 0
+        train_KL = 0 
         with tqdm(total=len(train_loader)) as t:
             for batch in train_loader:
-                x, y, seq_mask, seq_length = batch
-
+                x, y = batch
+                num_words += x.size(0) 
+                num_batch_words = x.size(0)
                 # Scale learning rate to sequence length
                 if args.use_var_bptt and not args.no_lr_scaling:
                     seq_len, _ = x.shape
                     optimizer.param_groups[0]['lr'] = args.lr * seq_len / args.bptt
 
-                # Adjust discriminative learning rates
+                # # Adjust discriminative learning rates
                 for i in range(len(optimizer.param_groups)):
                     optimizer.param_groups[i]['lr'] /= args.disc_rate ** i
 
@@ -232,12 +236,15 @@ try:
                 # print("raw_loss", raw_loss)
                 # AR/TAR
                 loss = raw_loss #+ loss_LDA
+                KL = KL.sum()
+
                 #print("raw_loss_size", raw_loss.size())
-                if args.encoder == 'awd_lstm':
-                    # print("dropped_out.size", len(dropped_out))
-                    loss += args.alpha * dropped_out[-1].pow(2).mean()
-                    loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
-                loss -= KL.sum() # <-- I think add it here, because alpha & beta are part of criterion
+                # if args.encoder == 'awd_lstm':
+                #     # print("dropped_out.size", len(dropped_out)) 
+                #     loss += args.alpha * dropped_out[-1].pow(2).mean()
+                #     loss += args.beta * (raw_out[-1][1:] - raw_out[-1][:-1]).pow(2).mean()
+                loss += KL # <-- I think add it here, because alpha & beta are part of criterion
+                train_KL += KL
                 # print("Train KL", KL.sum())
                 optimizer.zero_grad()
                 loss.backward()
@@ -252,16 +259,25 @@ try:
 
                 t.update()
                 train_loss += loss.item()
-        train_loss /= len(train_loader)
+                num_batch += 1
+        print("num_words", num_words) 
+        print("train_loss", train_loss) 
+        train_loss /= num_words
+        train_KL /= num_words
         train_losses.append(train_loss)
 
         model.eval()
         model.reset_hidden()
         valid_loss = 0
         KLD = 0
+        num_val_batch = 0
+        num_val_words = 0
         for batch in tqdm(valid_loader):
             with torch.no_grad():
-                x, y, seq_mask, seq_length = batch
+                x, y = batch
+                
+                num_val_words += x.size(0) 
+                num_batch_words = x.size(0)
                 x = x.to(device)
                 y = y.to(device)
                 # print("size of x", x.size())
@@ -269,20 +285,23 @@ try:
 
                 out = model(x)
                 out, p, KL = out
+                KL = KL.sum()
                 # print("KL val:", KL.sum())
                 # print("size of out", out.size())
-                loss = criterion(out.view(-1, vocab_sz), y) - KL.sum()
-
+                loss = criterion(out.view(-1, vocab_sz), y) + KL
+                
                 valid_loss += loss.item()
-                KLD += KL.sum()
-        valid_loss /= len(valid_loader)
+                KLD += KL / num_val_words 
+                num_val_batch += 1
+        print("num_val_words", num_val_words)
+        valid_loss /= num_val_words
         valid_losses.append(valid_loss)
 
         # Track and anneal LR
         if valid_loss < best_loss:
             best_loss = valid_loss
-            best_epoch = e
-            print("Best loss so far. Saving model.")
+            best_epoch = e 
+            print("Best loss so far. Saving model.") 
             with open('{}/{}.pth'.format(path, args.output), 'wb') as f:
                 torch.save(model.state_dict(), f)
         else:
@@ -290,8 +309,9 @@ try:
                 optimizer.param_groups[0]['lr'] /= args.anneal_factor
         cur_lr = optimizer.param_groups[0]['lr']
 
-        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Valid Total Loss {:.4f} | Valid KL {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), valid_loss, KLD, np.exp(valid_loss), cur_lr))
-
+        print("Epoch {:3} | Train Loss {:.4f} | Train Ppl {:.4f} | Train KL {:.4f} | Valid Total Loss {:.4f} | Valid KL {:.4f} |Valid Ppl {:.4f} | LR {:.4f}".format(e, train_loss, np.exp(train_loss), train_KL, valid_loss, KLD, np.exp(valid_loss), cur_lr))
+        num_batch = 0
+        num_val_batch = 0
 except KeyboardInterrupt:
     print("Exiting training early")
 
@@ -306,9 +326,12 @@ model.eval()
 model.reset_hidden()
 test_loss = 0
 KLD = 0 #again, = KL
+num_test_words = 0
 for batch in tqdm(test_loader): 
     with torch.no_grad(): 
-        x, y, seq_mask, seq_length = batch 
+        x, y = batch 
+        num_test_words += x.size(0)
+        num_batch_words = x.size(0)
         x = x.to(device)
         y = y.to(device)
 
@@ -316,12 +339,13 @@ for batch in tqdm(test_loader):
         out, p, KL = out
         KL = KL.sum()
         # print("KL test:", KL)
-        loss = criterion(out.view(-1, vocab_sz), y) - KL
+        loss = criterion(out.view(-1, vocab_sz), y) + KL
         KLD += KL
 
         test_loss += loss.item()
         #print("p sample from batch {:3}: {:.4f}".format(batch, p[0]))
-test_loss /= len(test_loader)
+test_loss /= num_test_words
+KLD /= num_test_words 
 
 print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test KL {:.4f}".format(test_loss, np.exp(test_loss), KLD))
 
