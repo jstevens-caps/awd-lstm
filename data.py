@@ -111,9 +111,10 @@ class Dictionary(object):
     def __len__(self):
         return len(self.idx2word)
     
-    def from_data(input_files): 
+    def from_data(input_files, _): 
         # Load unique words from data
         vocab = Dictionary() 
+        print("input_files", type(input_files)) 
         for input_file in input_files: 
             with codecs.open(input_file, 'r', encoding='utf8')  as f: 
                 for line in f: 
@@ -183,7 +184,8 @@ class Corpus_tok(object):
         # by default the max number of words in a sentence is 50 words  
         # we avoid processing very large mini-batches  
         if not skip_dict:
-            self.dictionary.from_data(input_files)
+            print("input files:", type(input_files)) 
+            self.dictionary.from_data(input_files) 
         data = [] # sentences
         y = []    # labels
         for input_file in input_files:  
