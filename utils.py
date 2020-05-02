@@ -63,7 +63,7 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     seq_mask = seq_mask.to(device) 
     seq_length = seq_length.to(device) 
     
-    return batch_input, batch_output, seq_mask, seq_length 
+    return batch_input, batch_output #, seq_mask, seq_length 
 
 def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., use_var_bptt=False): 
     # sentences, labels = source 
