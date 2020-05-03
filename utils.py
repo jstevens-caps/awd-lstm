@@ -3,23 +3,21 @@ import torch.utils.data as data_utils
 import numpy as np
 from tqdm import tqdm
 
+UNK_TOKEN = "<unk>"
+PAD_TOKEN = "<pad>"
+SOS_TOKEN = "<s>"
+EOS_TOKEN = "</s>"
+
 def batchify(data, bsz):
     # Work out how cleanly we can divide the dataset into bsz parts.
-    print("size sentences", len(data[0]))
-    print("size labels", len(data[1]))
-    nbatch = data[0].size(0) // bsz
+    # print("data.size", data.size())
+    nbatch = data.size(0) // bsz
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
     data = data.narrow(0, 0, nbatch * bsz)
     # Evenly divide the data across the bsz batches.
     data = data.view(bsz, -1).t().contiguous()
     return data
 
-
-def get_batch(source, i, bptt):
-    seq_len = min(bptt, len(source) - 1 - i)
-    data = source[i:i+seq_len]
-    target = source[i+1:i+1+seq_len].view(-1)
-    return data, target
 
 def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     """
@@ -40,7 +38,7 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     tok = np.array([sen.split() for sen in sentences])
     seq_lengths = [len(sen) for sen in tok]
     max_len = max(seq_lengths)
-    pad_id = vocab["<pad>"]  #pad token
+    pad_id = vocab[PAD_TOKEN]  #pad token 
     # padding of the sentences that a sorther than the max with 0
     pad_id_input = [
         [vocab[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
@@ -66,15 +64,29 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     seq_mask = seq_mask.to(device) 
     seq_length = seq_length.to(device) 
     
-    return batch_input, batch_output #, seq_mask, seq_length 
+    return batch_input, batch_output, seq_mask, seq_length 
+
+def get_batch(source, i, bptt, output_target=True, x=True):
+    seq_len = min(bptt, len(source) - 1 - i)
+    data = source[i:i+seq_len]
+    target = source[i+1:i+1+seq_len].view(-1)
+    
+    if output_target:
+      return data, target
+    else:
+      if x:
+        return data
+      else:
+        return target
 
 def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., use_var_bptt=False): 
     # sentences, labels = source 
-    data = batchify(source, bs)
+    #data = batchify(source, bs)
+    data = source
     loader = []
     
     i = 0
-    while i < data.size(0) - 2:
+    while i < len(source[0]) - 2:
         if use_var_bptt:
             rand_bptt = bptt if np.random.random() < 0.95 else bptt / 2. 
             seq_len = max(5, int(np.random.normal(rand_bptt, 5))) 
@@ -83,8 +95,17 @@ def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., us
         
         #batch = get_batch(data, i, seq_len)
         # sentences, labels = data
-        batch = create_batch(data, vocab, tag2id, device, word_dropout=0.)
-        loader.append(batch)   # batch = x, y, seq_mask, seq_length
+        x, y, seq_mask, seq_length = create_batch(data, vocab, tag2id, device, word_dropout=0.)
+        x_batch = batchify(x, bs)
+        y_batch = batchify(y, bs)
+        seq_mask_batch = batchify(seq_mask, bs)
+
+        x_batch = get_batch(x_batch, i, seq_len, output_target=False, x=True)
+        y_batch = get_batch(y_batch, i, seq_len, output_target=False, x=False)
+        seq_mask_batch = get_batch(seq_mask_batch, i, seq_len, output_target=False)
+        
+        batch = (x_batch, y_batch)
+        loader.append(batch)   # batch = x, y, currently not using seq_mask, seq_length
         
         i += seq_len
     
@@ -104,7 +125,7 @@ def get_loaders(source, bs, bptt, use_var_bptt=False):
         
         batch = get_batch(data, i, seq_len)
         loader.append(batch)
-        
+        print("i", i)
         i += seq_len
     
     return loader
