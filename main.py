@@ -15,7 +15,7 @@ import argparse
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
 from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult
-from data import Corpus, Corpus_tok, Dictionary
+from data import Corpus, Corpus_tok, Vocabulary
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--path', type=str, default='../data/wikitext-2', help='location of the data corpus')
@@ -112,15 +112,15 @@ else:
     torch.save(corpus, fn)
     if args.save_vocab:
         with open('{}/{}'.format(path, args.vocab_file), 'wb') as f:
-            torch.save([corpus.dictionary.word2idx, corpus.dictionary.idx2word], f)
+            torch.save([corpus.vocabulary.word2idx, corpus.vocabulary.idx2word], f)
 
-vocab_sz = len(corpus.dictionary)  
+vocab_sz = len(corpus.vocabulary)  
 
 # Produce dataloaders
 if args.tokenized == 1:
-    train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0., use_var_bptt=args.use_var_bptt)
-    valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0.)
-    test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.dictionary, tag_ids, word_dropout=0.)
+    train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
+    valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
 else:
     train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
     valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
