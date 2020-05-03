@@ -8,7 +8,7 @@ import re
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
 SOS_TOKEN = "<s>"
-EOS_TOKEN = "</s>"
+EOS_TOKEN = "<eos>"
 
 class Vocabulary(object):
     # may need to add something here in lines of dealing with tags
@@ -16,6 +16,10 @@ class Vocabulary(object):
         self.word2idx = {'<unk>': 0, '<pad>': 1, '<eos>': 2}
         self.idx2word = ['<unk>', '<pad>', '<eos>']
         self.vocab_set = set(self.idx2word)
+
+    def __getitem__(self, key):
+      # map words to indices, used for the embedding look-up table
+        return self.word2idx[key] if key in self.word2idx else self.word2idx[UNK_TOKEN]
 
     def add_word(self, word):
         if word not in self.word2idx:
@@ -47,26 +51,26 @@ class Vocabulary(object):
                         vocab.idx2word.append(token) 
         return vocab
 
-def from_data(input_files, vocab): 
+def from_data(input_file, vocab): 
         # Load unique words from data 
         # vocab = Vocabulary() 
-        print("input_files", type(input_files)) 
-        with input_files as input_file:   # removed the for loop
-            print("now opening input file", input_file) 
-            with codecs.open(input_file, 'r', encoding='utf8')  as f: 
-                for line in f: 
+        print("input_files", type(input_file)) 
+        
+        print("now opening input file", input_file) 
+        with codecs.open(input_file, 'r', encoding='utf8')  as f: 
+            for line in f: 
                     
-                    # Strip whitespace and the newline symbol.
-                    line = line.strip()
-                    # split data from .tsv  
-                    if line:
-                      #(token, tag) = re.split("\t", line)
-                      (token, word_type, tag) = re.split(" ", line)
-                      if token not in vocab.word2idx:
-                        idx = len(vocab.word2idx)
-                        # print(idx)
-                        vocab.word2idx[token] = idx
-                        vocab.idx2word.append(token)
+                # Strip whitespace and the newline symbol.
+                line = line.strip()
+                # split data from .tsv  
+                if line:
+                  #(token, tag) = re.split("\t", line)
+                  (token, word_type, tag) = re.split(" ", line)
+                  if token not in vocab.word2idx:
+                    idx = len(vocab.word2idx)
+                    # print(idx)
+                    vocab.word2idx[token] = idx
+                    vocab.idx2word.append(token)
         return vocab
 
 class Corpus_tok(object):
@@ -118,39 +122,38 @@ class Corpus_tok(object):
 #        Loads a list of sentences into memory from a text file, 
 #        split by newlines. 
     
-    def make_los(self, input_files, max_len=50, skip_dict=False):  
+    def make_los(self, input_file, max_len=50, skip_dict=False):  
         # by default the max number of words in a sentence is 50 words  
         # we avoid processing very large mini-batches  
         if not skip_dict:
-            print("input files make los:", (input_files)) 
-            vocab = from_data(input_files, self.vocabulary) 
-            print("vocab", vocab)  
+            print("input files make los:", (input_file)) 
+            vocab = from_data(input_file, self.vocabulary)   
         data = [] # sentences   
         y = []    # labels
-        idss = []
-        with input_files as input_file:  # removed for loop
-            # open uft-8 files  
-            with codecs.open(input_file, 'r', encoding='utf8')  as f:  
-                sentence = []  
-                labels = []  
-                start_flag = 0  
-                for line in f:  
-                    ids = []
-                    line = line.strip()  
+
+        # open uft-8 files  
+        with codecs.open(input_file, 'r', encoding='utf8')  as f:  
+            sentence = []  
+            labels = []  
+            start_flag = 0  
+            for line in f:  
+
+                line = line.strip()  
                     
-                    if line: 
-                      #(token, tag) = re.split("\t", line)
-                      (token, word_type, tag) = re.split(" ", line)
-                      sentence.append(token)
-                      labels.append(tag)   #altered this
-                    else: 
-                      if len(sentence) > 0 and len(sentence) <= max_len:
-                            data.append(' '.join(sentence))
-                            y.append(' '.join(labels))
-                      sentence = []
-                      labels = []
-                ids = torch.cat(idss)
-        return data, y
+                if line: 
+                  #(token, tag) = re.split("\t", line)
+                  (token, word_type, tag) = re.split(" ", line)
+                  sentence.append(token)
+                  # sentence.append(EOS_TOKEN)
+                  labels.append(tag)   #altered this
+                else: 
+                  if len(sentence) > 0 and len(sentence) <= max_len:
+                        data.append(' '.join(sentence))
+                        y.append(' '.join(labels))
+                  sentence = []
+                  labels = []
+    
+        return data, y 
 
     def __len__(self):
         # overide len to get number of instances
@@ -162,13 +165,13 @@ class Corpus_tok(object):
     
 class Corpus(object):
     def __init__(self, path, train_file, valid_file, test_file, load_vocab=False, vocab_file='vocab.pth'):
-        self.dictionary = Dictionary()
+        self.vocabulary = Vocabulary()
         if load_vocab:
             with open(os.path.join(path, vocab_file), 'rb') as f:
                 word2idx, idx2word = torch.load(f)
-            self.dictionary.word2idx = word2idx
-            self.dictionary.idx2word = idx2word
-            self.dictionary.vocab_set = set(idx2word)
+            self.vocabulary.word2idx = word2idx
+            self.vocabulary.idx2word = idx2word
+            self.vocabulary.vocab_set = set(idx2word)
         self.train = self.tokenize(os.path.join(path, train_file), skip_dict=load_vocab)
         self.valid = self.tokenize(os.path.join(path, valid_file), skip_dict=load_vocab)
         self.test = self.tokenize(os.path.join(path, test_file), skip_dict=load_vocab)
@@ -181,7 +184,7 @@ class Corpus(object):
             for line in f:
                 words = line.split() + ['<eos>']
                 for word in words:
-                    self.dictionary.add_word(word)
+                    self.vocabulary.add_word(word)
 
     def tokenize(self, path, skip_dict=False):
         if not skip_dict:
@@ -194,7 +197,7 @@ class Corpus(object):
                 words = line.split() + ['<eos>']
                 ids = []
                 for word in words:
-                    ids.append(self.dictionary.word2idx[word if word in self.dictionary.vocab_set else '<unk>'])
+                    ids.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else '<unk>'])
                 idss.append(torch.tensor(ids).type(torch.int64))
             ids = torch.cat(idss)
 
