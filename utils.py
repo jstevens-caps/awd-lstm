@@ -5,12 +5,15 @@ from tqdm import tqdm
 
 def batchify(data, bsz):
     # Work out how cleanly we can divide the dataset into bsz parts.
-    nbatch = data.size(0) // bsz
+    print("size sentences", len(data[0]))
+    print("size labels", len(data[1]))
+    nbatch = data[0].size(0) // bsz
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
     data = data.narrow(0, 0, nbatch * bsz)
     # Evenly divide the data across the bsz batches.
     data = data.view(bsz, -1).t().contiguous()
     return data
+
 
 def get_batch(source, i, bptt):
     seq_len = min(bptt, len(source) - 1 - i)
@@ -50,7 +53,7 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     
     
     # Convert everything to PyTorch tensors
-    batch_input = torch.tensor(pad_id_input)
+    batch_input = torch.tensor(pad_id_input) 
     batch_output = torch.tensor(pad_id_output)
     # define sequence mask to know what is a word and what is padding
     # this is used to mask the loss and we do not end up taking into account empty sequences
