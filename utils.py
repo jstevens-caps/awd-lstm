@@ -125,7 +125,6 @@ def get_loaders(source, bs, bptt, use_var_bptt=False):
         
         batch = get_batch(data, i, seq_len)
         loader.append(batch)
-        print("i", i)
         i += seq_len
     
     return loader
