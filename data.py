@@ -34,7 +34,6 @@ class Vocabulary(object):
     def from_data(input_files, _):  # This function is currently not being calle
         # Load unique words from data
         vocab = Vocabulary() 
-        print("input_files", type(input_files)) 
         for input_file in input_files: 
             with codecs.open(input_file, 'r', encoding='utf8')  as f: 
                 for line in f: 
@@ -54,9 +53,6 @@ class Vocabulary(object):
 def from_data(input_file, vocab): 
         # Load unique words from data 
         # vocab = Vocabulary() 
-        print("input_files", type(input_file)) 
-        
-        print("now opening input file", input_file) 
         with codecs.open(input_file, 'r', encoding='utf8')  as f: 
             for line in f: 
                     
@@ -126,7 +122,6 @@ class Corpus_tok(object):
         # by default the max number of words in a sentence is 50 words  
         # we avoid processing very large mini-batches  
         if not skip_dict:
-            print("input files make los:", (input_file)) 
             vocab = from_data(input_file, self.vocabulary)   
         data = [] # sentences   
         y = []    # labels
