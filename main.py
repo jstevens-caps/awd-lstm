@@ -332,6 +332,13 @@ model.reset_hidden()
 test_loss = 0
 KLD = 0 #again, = KL
 num_test_words = 0
+total_labels = 0.
+correct = 0
+num_sentences = 0
+test_pred = []
+y_true = []
+id2tag = {v: k for k, v in tag2id.items()}
+
 for batch in tqdm(test_loader): 
     with torch.no_grad(): 
         x, y = batch 
@@ -343,22 +350,31 @@ for batch in tqdm(test_loader):
         out = model(x)
         out, p, KL = out
         KL = KL.sum()
-        # print("KL test:", KL)
+       
         loss = criterion(out.view(-1, vocab_sz), y) + KL
         KLD += KL
 
         test_loss += loss.item()
-        #print("p sample from batch {:3}: {:.4f}".format(batch, p[0]))
+       
+        probs = torch.softmax(out, -1)
+        _, predicted = torch.max(out.data, 2) # this is not gonna work 
+        predicted = predicted.squeeze(0)
+        #print("predicted", predicted)
+        #print("predicted_size",predicted.size())
+        for p in predicted:   
+          if len(p) == 1:
+            tag = [id2tag[q.item()]]
+          else:           
+            tag = [id2tag[q.item()] for q in p]
+          output.append((sentences[0], tag))
+        l = labels.tolist() #numpy to string
+        y_true.append(l[0].split(' '))
+        #print("y_true", y_true)
+        lst = [j for _,j in output]
+            
 test_loss /= num_test_words
 KLD /= num_test_words 
-
-with torch.no_grad():
-    test_pred, y_true = predict_model(model,  
-                          corpus.test, # Need to check if using corpus.test is oke 
-                          corpus.vocabulary,  
-                          tag_ids,  
-                          device)
-    
+  
 # check out first prediction
 y_pred = [j for _,j in test_pred] # extract predictions form tuple (sentence, tags)
 print("length y_pred", len(y_pred))
