@@ -262,8 +262,7 @@ try:
                 t.update()
                 train_loss += loss.item()
                 num_batch += 1
-        print("num_words", num_words) 
-        print("train_loss", train_loss) 
+        
         train_loss /= num_words
         train_KL /= num_words
         train_losses.append(train_loss)
@@ -295,7 +294,7 @@ try:
                 valid_loss += loss.item()
                 KLD += KL / num_val_words 
                 num_val_batch += 1
-        print("num_val_words", num_val_words)
+        
         valid_loss /= num_val_words
         valid_losses.append(valid_loss)
 
