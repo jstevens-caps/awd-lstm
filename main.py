@@ -11,11 +11,15 @@ from io import open
 import hashlib
 import argparse
 
+from seqeval.metrics import classification_report
+from seqeval.metrics import f1_score
+
 #from transformers import WarmupLinearSchedule
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
 from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult
 from data import Corpus, Corpus_tok, Vocabulary
+from predict import predict_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--path', type=str, default='../data/wikitext-2', help='location of the data corpus')
@@ -348,10 +352,40 @@ for batch in tqdm(test_loader):
 test_loss /= num_test_words
 KLD /= num_test_words 
 
-print("Test Total Loss {:.4f} | Test Ppl {:.4f} | Test KL {:.4f}".format(test_loss, np.exp(test_loss), KLD))
+with torch.no_grad():
+    test_pred, y_true = predict_model(model,  
+                          corpus.test, # Need to check if using corpus.test is oke 
+                          corpus.vocabulary,  
+                          tag_ids,  
+                          device)
+    
+# check out first prediction
+y_pred = [j for _,j in test_pred] # extract predictions form tuple (sentence, tags)
+print("length y_pred", len(y_pred))
+
+# Eval full dataset on F1, precision and recall
+print(classific_report(y_true, y_pred))
+F1_full = f1_score(y_true, y_pred)
+print('F1 full: %.3f '%F1_full)
+
+# eval on one instance 
+# print(y_pred[0])
+# print(y_true[0])
+print(classific_report(y_true[0], y_pred[0]))
+print('F1 0: %.3f '%f1_score(y_true[0], y_pred[0]))
+
+# print(y_pred[1])
+# print(y_true[1])
+print(classific_report(y_true[1], y_pred[1]))
+print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
+
+print("Test Total Loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} ".format(test_loss, KLD, np.exp(test_loss), F1_full))
 
 # Saving graphs
 print("Saving loss data")
 pd.DataFrame(data={'train': train_losses, 'valid': valid_losses}).to_csv('{}/{}.csv'.format(path, args.output), index=False)
 with open('{}/{}.txt'.format(path, args.output), 'w') as f:
     f.write("Best loss {:.4f} | Best ppl {:.4f} | Epoch {} | Test loss {:.4f} | Test ppl {:.4f}".format(best_loss, np.exp(best_loss), best_epoch, test_loss, np.exp(test_loss)))
+
+    
+    
