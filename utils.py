@@ -35,24 +35,35 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     """
     # we get the max lenght sentence in a mini-batch to create the padding
     sentences, labels = data
-    tok = np.array([sen.split() for sen in sentences])
-    seq_lengths = [len(sen) for sen in tok]
+    tok = np.array([([SOS_TOKEN] + sen.split() + [EOS_TOKEN]) for sen in sentences])
+    seq_lengths = [len(sen)-1 for sen in tok]
     max_len = max(seq_lengths)
     pad_id = vocab[PAD_TOKEN]  #pad token 
-    # padding of the sentences that a sorther than the max with 0
+     # padding of the sentences that a sorther than the max with 0
     pad_id_input = [
         [vocab[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
             for idx, sen in enumerate(tok)]
     # we do the same for the labels
-    tags = np.array([l.split() for l in labels])
-    pad_id_output = [
+    tags = np.array([l.split() for l in labels])    
+    tag_output = [
         [tag2id[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
             for idx, sen in enumerate(tags)]
+    # Replace words of the input with <unk> with p = word_dropout.
+    if word_dropout > 0.:
+        unk_id = vocab[UNK_TOKEN]
+        word_drop =  [
+            [unk_id if (np.random.random() < word_dropout and t < seq_lengths[idx]) else word_ids[t] for t in range(max_len)] 
+                for idx, word_ids in enumerate(pad_id_input)]
     
+    # The output batch is shifted by 1.
+    pad_id_output = [
+        [vocab[sen[t+1]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
+            for idx, sen in enumerate(tok)]
     
     # Convert everything to PyTorch tensors
     batch_input = torch.tensor(pad_id_input) 
     batch_output = torch.tensor(pad_id_output)
+    tags = torch.tensor(tag_output)
     # define sequence mask to know what is a word and what is padding
     # this is used to mask the loss and we do not end up taking into account empty sequences
     seq_mask = (batch_input != vocab[PAD_TOKEN])
@@ -63,8 +74,9 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     batch_output = batch_output.to(device) 
     seq_mask = seq_mask.to(device) 
     seq_length = seq_length.to(device) 
+    tags = tags.to(device)
     
-    return batch_input, batch_output, seq_mask, seq_length 
+    return batch_input, batch_output, tags, seq_mask, seq_length 
 
 def get_batch(source, i, bptt, output_target=True, x=True):
     seq_len = min(bptt, len(source) - 1 - i)
@@ -92,20 +104,25 @@ def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., us
             seq_len = max(5, int(np.random.normal(rand_bptt, 5))) 
         else:
             seq_len = bptt
+        # var_bptt currently not used, could be used by adding seq_len to create_batch
         
-        #batch = get_batch(data, i, seq_len)
         # sentences, labels = data
-        x, y, seq_mask, seq_length = create_batch(data, vocab, tag2id, device, word_dropout=0.)
+        x, y, tags, seq_mask, seq_length = create_batch(data, vocab, tag2id, device, word_dropout=0.)
+        
+        # convert labels into tensor
+        labels = data[1]
+        labels = np.array([l.split() for l in labels]) 
+        labels = torch.tensor(labels)
+        
+        # divide into batches 
         x_batch = batchify(x, bs)
         y_batch = batchify(y, bs)
+        tags    = batchify(tags, bs)   # Tags are currently set up for if we want to train with them (we dont tho)
+        labels  = batchify(labels, bs) 
         seq_mask_batch = batchify(seq_mask, bs)
-
-        x_batch = get_batch(x_batch, i, seq_len, output_target=False, x=True)
-        y_batch = get_batch(y_batch, i, seq_len, output_target=False, x=False)
-        seq_mask_batch = get_batch(seq_mask_batch, i, seq_len, output_target=False)
         
         batch = (x_batch, y_batch)
-        loader.append(batch)   # batch = x, y, currently not using seq_mask, seq_length
+        loader.append((batch, tags))   # batch = x, y, currently not using seq_mask, seq_length
         
         i += seq_len
     
