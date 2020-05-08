@@ -213,10 +213,11 @@ try:
         train_loss = 0
         train_KL = 0 
         with tqdm(total=len(train_loader)) as t:
-            for batch in train_loader:
+            for batch, tags in train_loader:
                 x, y = batch
                 num_words += x.size(0) 
                 num_batch_words = x.size(0)
+                
                 # Scale learning rate to sequence length
                 if args.use_var_bptt and not args.no_lr_scaling:
                     seq_len, _ = x.shape
@@ -228,11 +229,7 @@ try:
 
                 x = x.to(device)
                 y = y.to(device)
-                #x = torch.transpose(x, 0, 1)
-
-                # print("size of x", x.size())
-                # print("size of y", y.size())
-
+               
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
                 # print("size of out", out.size())
@@ -277,7 +274,7 @@ try:
         KLD = 0
         num_val_batch = 0
         num_val_words = 0
-        for batch in tqdm(valid_loader):
+        for batch, tags in tqdm(valid_loader):
             with torch.no_grad():
                 x, y = batch
                 
@@ -339,7 +336,7 @@ test_pred = []
 y_true = []
 id2tag = {v: k for k, v in tag2id.items()}
 
-for batch in tqdm(test_loader): 
+for batch, labels in tqdm(test_loader): 
     with torch.no_grad(): 
         x, y = batch 
         num_test_words += x.size(0)
@@ -357,16 +354,16 @@ for batch in tqdm(test_loader):
         test_loss += loss.item()
        
         probs = torch.softmax(out, -1)
-        _, predicted = torch.max(out.data, 2) # this is not gonna work 
+        _, predicted = torch.max(out.data, 2) 
         predicted = predicted.squeeze(0)
         #print("predicted", predicted)
         #print("predicted_size",predicted.size())
         for p in predicted:   
           if len(p) == 1:
-            tag = [id2tag[q.item()]]
+            tag = [id2tag[p.item()]]
           else:           
             tag = [id2tag[q.item()] for q in p]
-          output.append((sentences[0], tag))
+          output.append((labels[0], tag))  
         l = labels.tolist() #numpy to string
         y_true.append(l[0].split(' '))
         #print("y_true", y_true)
