@@ -83,13 +83,13 @@ parser.add_argument('-q', '--init-mult',        type=float, default=1.0)    # mu
 parser.add_argument('-v', '--variance',         type=float, default=0.995)  # default variance in prior normal
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
 parser.add_argument('--tokenized',  type=int, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
+parser.add_argument('--prior_train', action='store_true', help='whether we train the prior')
 
 args = parser.parse_args()
 
 if args.decoder == 'dropoutlinear': assert args.encoder == 'awd_lstm'
 
-#tag_ids = {'B':0, 'I':1, 'O':2}
-tag_ids = {'B-MISC':0, 'I-MISC':1, 'B-LOC':2, 'I-LOC':3, 'B-PER':4, 'I-PER':5, 'B-ORG':6, 'I-ORG':7, 'O':8}
+tag_ids = {'MISC':0, 'LOC':1, 'PER':2, 'ORG':3, 'O':4}
     
 # CUDA
 device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and not args.no_cuda else 'cpu')
@@ -122,10 +122,14 @@ else:
 
 vocab_sz = len(corpus.vocabulary)  
 
+
 # Produce dataloaders
 if args.tokenized == 1:
+    print("Producing train dataloader...")
     train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
+    print("Producing val dataloader...")
     valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    print("Producing test dataloader...")
     test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
 else:
     train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
@@ -140,7 +144,7 @@ net_arch.device_tn = device
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
-    encoder = AWDLSTMEncoder(net_arch, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
+    encoder = AWDLSTMEncoder(net_arch, prior_train=args.prior_train, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
                              num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp,
                              input_dp=args.input_dp, hidden_dp=args.hidden_dp, tie_weights=args.tie_weights)
 elif args.encoder == 'lstm':
@@ -213,7 +217,9 @@ try:
         train_loss = 0
         train_KL = 0 
         with tqdm(total=len(train_loader)) as t:
-            for batch, tags in train_loader:
+            for batch in train_loader:
+                if args.tokenized == 1:                 
+                  batch, tags = batch
                 x, y = batch
                 num_words += x.size(0) 
                 num_batch_words = x.size(0)
@@ -229,7 +235,7 @@ try:
 
                 x = x.to(device)
                 y = y.to(device)
-               
+                
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
                 # print("size of out", out.size())
@@ -240,7 +246,6 @@ try:
                 # AR/TAR
                 loss = raw_loss #+ loss_LDA
                 KL = KL.sum()
-
                 #print("raw_loss_size", raw_loss.size())
                 # if args.encoder == 'awd_lstm':
                 #     # print("dropped_out.size", len(dropped_out)) 
@@ -274,8 +279,10 @@ try:
         KLD = 0
         num_val_batch = 0
         num_val_words = 0
-        for batch, tags in tqdm(valid_loader):
+        for batch in tqdm(valid_loader):
             with torch.no_grad():
+                if args.tokenized == 1:                 
+                  batch, tags = batch
                 x, y = batch
                 
                 num_val_words += x.size(0) 
@@ -336,8 +343,10 @@ test_pred = []
 y_true = []
 id2tag = {v: k for k, v in tag2id.items()}
 
-for batch, labels in tqdm(test_loader): 
+for batch in tqdm(test_loader): 
     with torch.no_grad(): 
+        if args.tokenized == 1:         
+          batch, labels = batch
         x, y = batch 
         num_test_words += x.size(0)
         num_batch_words = x.size(0)
