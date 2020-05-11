@@ -12,12 +12,19 @@ def batchify(data, bsz):
     # Work out how cleanly we can divide the dataset into bsz parts.
     # print("data.size", data.size())
     nbatch = data.size(0) // bsz
+    # print("nbatch", nbatch)
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
     data = data.narrow(0, 0, nbatch * bsz)
     # Evenly divide the data across the bsz batches.
     data = data.view(bsz, -1).t().contiguous()
     return data
 
+def batchify_tup(data, bsz):
+    # this function lets us batchify the tuple (sentences, labels)
+    sentences, labels = data
+    sen_batch = batchify(sentences, bsz)
+    lab_batch = batchify(labels, bsz)
+    return sen_batch, lab_batch
 
 def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     """
@@ -34,17 +41,21 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     :returns: a batch of padded inputs, a batch of outputs, mask, lengths
     """
     # we get the max lenght sentence in a mini-batch to create the padding
-    sentences, labels = data
+    senntences, labels = data 
+    # convert these tensors into lists
+    sentences.to_list()
+    labels.to_list()
+
     tok = np.array([([SOS_TOKEN] + sen.split() + [EOS_TOKEN]) for sen in sentences])
-    seq_lengths = [len(sen)-1 for sen in tok]
-    max_len = max(seq_lengths)
+    seq_lengths = [len(sen)-1 for sen in tok] 
+    max_len = max(seq_lengths) 
     pad_id = vocab[PAD_TOKEN]  #pad token 
      # padding of the sentences that a sorther than the max with 0
     pad_id_input = [
         [vocab[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
             for idx, sen in enumerate(tok)]
     # we do the same for the labels
-    tags = np.array([l.split() for l in labels])    
+    tags = np.array([l.split() for l in labels])  
     tag_output = [
         [tag2id[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
             for idx, sen in enumerate(tags)]
@@ -78,53 +89,54 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     
     return batch_input, batch_output, tags, seq_mask, seq_length 
 
-def get_batch(source, i, bptt, output_target=True, x=True):
+def get_batch(source, i, bptt, output_target=True):
     seq_len = min(bptt, len(source) - 1 - i)
+    # if seq_len <= 10:
+    #   print("\nSEQ LEN 00000!!!!!!!!!\n")
     data = source[i:i+seq_len]
     target = source[i+1:i+1+seq_len].view(-1)
-    
+    #print("i - seq_len", i - seq_len)
     if output_target:
       return data, target
     else:
-      if x:
-        return data
-      else:
-        return target
+      return data
+
+def get_batch_tup(source, i, bptt):
+    x, y = get_batch(source[0], i, bptt) # Get a batch of the sentences
+    tags = get_batch(source[1], i, bptt, output_target=False) # Get a batch of the labels
+    return ((x, y), tags)
 
 def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., use_var_bptt=False): 
     # sentences, labels = source 
     #data = batchify(source, bs)
-    data = source
-    loader = []
-    
+    data = batchify_tup(source, bs)
+    loader = []    
     i = 0
-    while i < len(source[0]) - 2:
+    while i < len(source[0]):
         if use_var_bptt:
             rand_bptt = bptt if np.random.random() < 0.95 else bptt / 2. 
             seq_len = max(5, int(np.random.normal(rand_bptt, 5))) 
         else:
             seq_len = bptt
-        # var_bptt currently not used, could be used by adding seq_len to create_batch
-        
-        # sentences, labels = data
-        x, y, tags, seq_mask, seq_length = create_batch(data, vocab, tag2id, device, word_dropout=0.)
-        
-        # convert labels into tensor
-        labels = data[1]
-        labels = np.array([l.split() for l in labels]) 
-        labels = torch.tensor(labels)
-        
-        # divide into batches 
-        x_batch = batchify(x, bs)
-        y_batch = batchify(y, bs)
-        tags    = batchify(tags, bs)   # Tags are currently set up for if we want to train with them (we dont tho)
-        labels  = batchify(labels, bs) 
-        seq_mask_batch = batchify(seq_mask, bs)
-        
-        batch = (x_batch, y_batch)
-        loader.append((batch, tags))   # batch = x, y, currently not using seq_mask, seq_length
-        
+        batch = get_batch_tup(data, i, seq_len) 
+        loader.append(batch) # batch = ((x,y), tags)       
         i += seq_len
+        # var_bptt currently not used, could be used by adding seq_len to create_batch
+
+        # # sentences, labels = data
+        # x, y, tags, seq_mask, seq_length = create_batch(data, vocab, tag2id, device, word_dropout=0.)
+        # # convert labels into tensor
+        # # labels = data[1]
+        # # labels = np.array([l.split() for l in labels]) 
+        # # labels = torch.tensor(labels)       
+        # # divide into batches 
+        # x_batch = batchify(x, bs)
+        # y_batch = batchify(y, bs)
+        # #tags    = batchify(tags, bs)   # Tags are currently set up for if we want to train with them (we dont tho)
+        # #labels  = batchify(labels, bs) 
+        # seq_mask_batch = batchify(seq_mask, bs)        
+        # batch = (x_batch, y_batch)
+        # loader.append((batch, tags))   # batch = x, y, currently not using seq_mask, seq_length
     
     return loader
 
@@ -140,7 +152,7 @@ def get_loaders(source, bs, bptt, use_var_bptt=False):
         else:
             seq_len = bptt
         
-        batch = get_batch(data, i, seq_len)
+        batch = get_batch(data, i, seq_len, output_target=True)
         loader.append(batch)
         i += seq_len
     
