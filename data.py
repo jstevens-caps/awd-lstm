@@ -9,6 +9,7 @@ UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
 SOS_TOKEN = "<s>"
 EOS_TOKEN = "<eos>"
+tag_ids = {'MISC':0, 'LOC':1, 'PER':2, 'ORG':3, 'O':4}
 
 class Vocabulary(object):
     # may need to add something here in lines of dealing with tags
@@ -65,8 +66,12 @@ def from_data(input_file, vocab):
                   if token not in vocab.word2idx:
                     idx = len(vocab.word2idx)
                     # print(idx)
+                    #print("adding to vocabulary token", token)
                     vocab.word2idx[token] = idx
                     vocab.idx2word.append(token)
+                    vocab.vocab_set.add(token)
+                    # print("index of word in word2idx", vocab.word2idx[token])
+                    # print("word at idx in idx2word", vocab.idx2word[idx])
         return vocab
 
 class Corpus_tok(object):
@@ -108,7 +113,7 @@ class Corpus_tok(object):
                 words = line.split() + ['<eos>']
                 ids = []
                 for word in words:
-                    ids.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else '<unk>'])
+                    ids.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else UNK_TOKEN])
                 idss.append(torch.tensor(ids).type(torch.int64))
             ids = torch.cat(idss)
 
@@ -121,8 +126,9 @@ class Corpus_tok(object):
     def make_los(self, input_file, max_len=50, skip_dict=False):  
         # by default the max number of words in a sentence is 50 words  
         # we avoid processing very large mini-batches  
+        print("Loading file: ", input_file)
         if not skip_dict:
-            vocab = from_data(input_file, self.vocabulary)   
+            self.vocabulary = from_data(input_file, self.vocabulary)   
         data = [] # sentences   
         y = []    # labels
 
@@ -137,18 +143,20 @@ class Corpus_tok(object):
                     
                 if line: 
                   #(token, tag) = re.split("\t", line)
-                  (token, word_type, tag) = re.split(" ", line)
-                  sentence.append(token)
-                  # sentence.append(EOS_TOKEN)
-                  labels.append(tag)   #altered this
+                  (word, word_type, tag) = re.split(" ", line)
+                  
+                  sentence.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else UNK_TOKEN])
+                  labels.append(tag_ids[tag]) 
                 else: 
-                  if len(sentence) > 0 and len(sentence) <= max_len:
-                        data.append(' '.join(sentence))
-                        y.append(' '.join(labels))
+                  if len(sentence) > 0 and len(sentence) <= max_len: 
+                        sentence.append(self.vocabulary.word2idx[EOS_TOKEN]) 
+                        data.append(torch.tensor(sentence).type(torch.int64)) 
+                        y.append(torch.tensor(labels).type(torch.int64)) 
                   sentence = []
                   labels = []
-    
-        return data, y 
+            data_ten = torch.cat(data)
+            y_ten = torch.cat(data)
+        return data_ten, y_ten 
 
     def __len__(self):
         # overide len to get number of instances
