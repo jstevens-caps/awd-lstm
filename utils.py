@@ -5,14 +5,12 @@ from tqdm import tqdm
 
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
-SOS_TOKEN = "<s>"
-EOS_TOKEN = "</s>"
+SOS_TOKEN = "<sos>"
+EOS_TOKEN = "<eos>"
 
 def batchify(data, bsz):
     # Work out how cleanly we can divide the dataset into bsz parts.
-    # print("data.size", data.size())
     nbatch = data.size(0) // bsz
-    # print("nbatch", nbatch)
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
     data = data.narrow(0, 0, nbatch * bsz)
     # Evenly divide the data across the bsz batches.
@@ -91,12 +89,9 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
 
 def get_batch(source, i, bptt, output_target=True):
     seq_len = min(bptt, len(source) - 1 - i)
-    # if seq_len <= 10:
-    #   print("\nSEQ LEN 00000!!!!!!!!!\n")
     data = source[i:i+seq_len]
     target = source[i+1:i+1+seq_len].view(-1)
-    #print("i - seq_len", i - seq_len)
-    if output_target:
+    if output_target:           
       return data, target
     else:
       return data
@@ -112,16 +107,15 @@ def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., us
     data = batchify_tup(source, bs)
     loader = []    
     i = 0
-    while i < len(source[0]):
+    while i < data[0].size(0) - 2:
         if use_var_bptt:
             rand_bptt = bptt if np.random.random() < 0.95 else bptt / 2. 
             seq_len = max(5, int(np.random.normal(rand_bptt, 5))) 
         else:
             seq_len = bptt
-        batch = get_batch_tup(data, i, seq_len) 
+        batch = get_batch_tup(data, i, seq_len)
         loader.append(batch) # batch = ((x,y), tags)       
         i += seq_len
-        # var_bptt currently not used, could be used by adding seq_len to create_batch
 
         # # sentences, labels = data
         # x, y, tags, seq_mask, seq_length = create_batch(data, vocab, tag2id, device, word_dropout=0.)
@@ -180,7 +174,15 @@ def get_param_groups(model):
         else:
             p_groups[0]['params'].append(p)
     return p_groups
-    
+
+def extract_tags(p, id2tag): 
+    # Extracts tags into a list
+    if len(p) == 1:
+        tag = [id2tag[p.item()]]
+    else:           
+        tag = [id2tag[q.item()] for q in p] 
+    return tag
+
 def accuracy(out, y):
     return torch.sum(torch.max(torch.softmax(out, dim=1), dim=1)[1] == y).item() / len(y)
     
