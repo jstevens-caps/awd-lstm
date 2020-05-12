@@ -7,7 +7,7 @@ import re
 
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
-SOS_TOKEN = "<s>"
+SOS_TOKEN = "<sos>"
 EOS_TOKEN = "<eos>"
 tag_ids = {'MISC':0, 'LOC':1, 'PER':2, 'ORG':3, 'O':4}
 
@@ -87,7 +87,9 @@ class Corpus_tok(object):
         # This self.train/valid/test now consist of (sentences, labels), sentences split by newlines 
         self.train = self.make_los(os.path.join(path, train_file), skip_dict=load_vocab, max_len=max_sen_len) 
         self.valid = self.make_los(os.path.join(path, valid_file), skip_dict=load_vocab,  max_len=max_sen_len) 
-        self.test  = self.make_los(os.path.join(path, test_file), skip_dict=load_vocab, max_len=max_sen_len)
+        sen_ids, labs, sen_words = self.make_los(os.path.join(path, test_file), skip_dict=load_vocab, max_len=max_sen_len, evalu=True)
+        self.test = sen_ids, labs
+        self.test_sentences = sen_words
 #         self.train = self.tokenize(os.path.join(path, train_file), skip_dict=load_vocab)
 #         self.valid = self.tokenize(os.path.join(path, valid_file), skip_dict=load_vocab)
 #         self.test = self.tokenize(os.path.join(path, test_file), skip_dict=load_vocab)
@@ -118,44 +120,49 @@ class Corpus_tok(object):
             ids = torch.cat(idss)
 
         return ids
-    
-   
+
+
 #        Loads a list of sentences into memory from a text file, 
 #        split by newlines. 
     
-    def make_los(self, input_file, max_len=50, skip_dict=False):  
+    def make_los(self, input_file, max_len=50, skip_dict=False, evalu=False):  
         # by default the max number of words in a sentence is 50 words  
         # we avoid processing very large mini-batches  
         print("Loading file: ", input_file)
         if not skip_dict:
             self.vocabulary = from_data(input_file, self.vocabulary)   
-        data = [] # sentences   
-        y = []    # labels
+        data = []                  # sentences (ids)  
+        y = []                     # labels
+        sentence_words_total = []  # sentences (words)
 
         # open uft-8 files  
         with codecs.open(input_file, 'r', encoding='utf8')  as f:  
             sentence = []  
-            labels = []  
-            start_flag = 0  
+            labels = []  # test_true
+            sentence_words = []
             for line in f:  
-
                 line = line.strip()  
                     
                 if line: 
                   #(token, tag) = re.split("\t", line)
                   (word, word_type, tag) = re.split(" ", line)
-                  
+                  sentence_words.append(word)
                   sentence.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else UNK_TOKEN])
                   labels.append(tag_ids[tag]) 
                 else: 
                   if len(sentence) > 0 and len(sentence) <= max_len: 
                         sentence.append(self.vocabulary.word2idx[EOS_TOKEN]) 
+                        sentence_words.append(EOS_TOKEN)
+                        sentence_words_total.append(sentence_words)
                         data.append(torch.tensor(sentence).type(torch.int64)) 
                         y.append(torch.tensor(labels).type(torch.int64)) 
-                  sentence = []
-                  labels = []
+                  sentence = [] 
+                  labels = [] 
+                  sentence_words = []                    
             data_ten = torch.cat(data)
-            y_ten = torch.cat(data)
+            y_ten = torch.cat(y)
+        if evalu:
+          return data_ten, y_ten, sentence_words_total
         return data_ten, y_ten 
 
     def __len__(self):
