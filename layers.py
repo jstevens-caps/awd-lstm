@@ -155,7 +155,8 @@ class AWDLSTMEncoder(nn.Module):
 
     def forward(self, x):
         msl, bs = x.shape  #msl = words, bs = batch
-
+        if msl == 0:
+          print("\nMSL 0000 !!!!")
         # Initialize hidden states or detatch from history
         # We need to detatch or else the model will backprop
         # through previous batches on a new batch
@@ -167,13 +168,12 @@ class AWDLSTMEncoder(nn.Module):
 
         out = self.emb_dp(x)
         # print("out.size 1:", out.size())
-        out.retain_grad()
         raw_output = []
         dropped_output = []
         out = self.input_dp(out)
         # print("out.size 2:", out.size())
         for i in range(len(self.rnn)):
-            print("lengths:", out.size(), len(self.hidden[i]), len(self.cell[i]))
+            # print("lengths:", out.size(), len(self.hidden[i]), len(self.cell[i]))
             out, (self.hidden[i], self.cell[i]) = self.weight_dp[i](out, (self.hidden[i], self.cell[i]))
             raw_output.append(out)
 
@@ -184,8 +184,6 @@ class AWDLSTMEncoder(nn.Module):
         #LDA IMPORT
         #def forward(self, input, compute_loss=False, avg_loss=True):
         # compute posterior
-        # print("out.size :", out.size()) # words * batch * hidden
-        #print("dropped.size :", dropped_output.size())
         en1 = F.softplus(self.en1_fc(out))                              # en1_fc   output
         # print("en1.size :", en1.size())
         en2 = F.softplus(self.en2_fc(en1))                              # encoder2 output
@@ -197,10 +195,8 @@ class AWDLSTMEncoder(nn.Module):
         #eps = Variable(input.data.new().resize_as_(posterior_mean.data).normal_()) # noise
         eps = torch.randn_like(posterior_var)
         z = posterior_mean + posterior_var.sqrt() * eps                 # reparameterization
-        z.retain_grad()
         # print("z.size", z.size())
         p_no_drop = self.softmax_p(z)                                   # mixture probability
-        p_no_drop.retain_grad()
         p = self.p_drop(p_no_drop)
 
         # do reconstruction
@@ -301,7 +297,6 @@ class DropoutLinearDecoder(nn.Module):
         # and dropped_output should have equal number of
         # elements now
         out = self.out_dp(out)
-        out.retain_grad()
         dropped.append(out)                  # this is relevant for dropped, check if that is oke <-- what should happen with drop?
 
         # print("hidden_shape", hidden[-1].size())
@@ -311,7 +306,6 @@ class DropoutLinearDecoder(nn.Module):
         hidden_rp = hidden_rp.repeat(msl, 1, 1)
         # print("hidden_size", hidden_rp.size())
         combo = torch.cat((p, out), dim=2)  # over the topic dimensions
-        combo.retain_grad()
         combo = self.combo_fc(combo)         # check dimensions of this
         out = self.fc1(combo)
 
