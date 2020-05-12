@@ -17,7 +17,7 @@ from seqeval.metrics import f1_score
 #from transformers import WarmupLinearSchedule
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
-from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult
+from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags
 from data import Corpus, Corpus_tok, Vocabulary
 from predict import predict_model
 
@@ -90,7 +90,11 @@ args = parser.parse_args()
 if args.decoder == 'dropoutlinear': assert args.encoder == 'awd_lstm'
 
 tag_ids = {'MISC':0, 'LOC':1, 'PER':2, 'ORG':3, 'O':4}
-    
+UNK_TOKEN = "<unk>"
+PAD_TOKEN = "<pad>"
+SOS_TOKEN = "<sos>"
+EOS_TOKEN = "<eos>" 
+
 # CUDA
 device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and not args.no_cuda else 'cpu')
 np.random.seed(args.seed)
@@ -139,7 +143,7 @@ else:
 # Prepare arguments as input for encoder
 net_arch = args
 net_arch.num_input = 5920  
-# print("vocab_size:", vocab_sz)
+print("Vocabulary Size:", vocab_sz)
 net_arch.device_tn = device
 
 # Construct encoder
@@ -235,7 +239,7 @@ try:
 
                 x = x.to(device)
                 y = y.to(device)
-                
+
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
                 # print("size of out", out.size())
@@ -334,70 +338,91 @@ print("Evaluating model")
 model.eval()
 model.reset_hidden()
 test_loss = 0
-KLD = 0 #again, = KL
+KLD = 0 
 num_test_words = 0
 total_labels = 0.
 correct = 0
 num_sentences = 0
 test_pred = []
 y_true = []
-id2tag = {v: k for k, v in tag2id.items()}
+word_list = []
+id2tag = {v: k for k, v in tag_ids.items()}
 
 for batch in tqdm(test_loader): 
     with torch.no_grad(): 
         if args.tokenized == 1:         
-          batch, labels = batch
+          batch, labels = batch  
         x, y = batch 
-        num_test_words += x.size(0)
-        num_batch_words = x.size(0)
-        x = x.to(device)
-        y = y.to(device)
 
-        out = model(x)
-        out, p, KL = out
-        KL = KL.sum()
+        #sentences = [corpus.vocabulary.idx2word[idx] for idx in sentence_idxs]
+        num_test_words += x.size(0) 
+        num_batch_words = x.size(0) 
+        x = x.to(device) 
+        y = y.to(device) 
+
+        out = model(x) 
+        out, p, KL = out 
+        KL = KL.sum() 
        
         loss = criterion(out.view(-1, vocab_sz), y) + KL
         KLD += KL
 
         test_loss += loss.item()
-       
-        probs = torch.softmax(out, -1)
-        _, predicted = torch.max(out.data, 2) 
+        probs = torch.softmax(p, -1)
+        _, predicted = torch.max(p.data, -1) 
         predicted = predicted.squeeze(0)
-        #print("predicted", predicted)
-        #print("predicted_size",predicted.size())
-        for p in predicted:   
-          if len(p) == 1:
-            tag = [id2tag[p.item()]]
-          else:           
-            tag = [id2tag[q.item()] for q in p]
-          output.append((labels[0], tag))  
-        l = labels.tolist() #numpy to string
-        y_true.append(l[0].split(' '))
-        #print("y_true", y_true)
-        lst = [j for _,j in output]
-            
+
+        for inst in x:
+          words = extract_tags(inst, corpus.vocabulary.idx2word) 
+          word_list.append(words)
+
+        i = 0
+        for p in predicted: 
+          tag_pred = extract_tags(p, id2tag)
+          test_pred.append((word_list[i], tag_pred))
+          i += 1  
+        for l in labels:
+          tag_true = extract_tags(l, id2tag)
+          y_true.append(tag_true)
+
+def classific_report(y_true, y_pred): 
+  if len(y_pred) == 1 or len(y_true) == 1: 
+    return "Cant classify, only one element" 
+  else: return classification_report(y_true, y_pred) 
+
 test_loss /= num_test_words
 KLD /= num_test_words 
-  
-# check out first prediction
-y_pred = [j for _,j in test_pred] # extract predictions form tuple (sentence, tags)
-print("length y_pred", len(y_pred))
+ 
+# extract predictions from tuple (sentence, tags)
+y_pred = [j for _,j in test_pred] 
+
+# Remove EOS tokens from y_pred and word_list:
+# for instance in range(len(word_list)):
+#   indices = [i for i, x in enumerate(word_list[instance]) if x == EOS_TOKEN]
+#   y_pred[instance] = [i for j, i in enumerate(y_pred[instance]) if j not in indices]
+#   word_list[instance] = [i for j, i in enumerate(word_list[instance]) if j not in indices]
 
 # Eval full dataset on F1, precision and recall
+print("\nEvaluating on full test dataset")
 print(classific_report(y_true, y_pred))
 F1_full = f1_score(y_true, y_pred)
 print('F1 full: %.3f '%F1_full)
 
 # eval on one instance 
-# print(y_pred[0])
-# print(y_true[0])
+print("\nEvaluating on instance 0")
+print("len predicted", len(y_pred[0]))
+print("len true     ", len(y_true[0]))
+print("len words    ", len(word_list[0]))
+print("Predicted:", y_pred[0])
+print("True     :", y_true[0])
+print("Words    :", word_list[0])
 print(classific_report(y_true[0], y_pred[0]))
 print('F1 0: %.3f '%f1_score(y_true[0], y_pred[0]))
 
-# print(y_pred[1])
-# print(y_true[1])
+print("\nEvaluating on instance 1")
+print("Predicted:", y_pred[1])
+print("True     :", y_true[1])
+print("Words    :", word_list[1])
 print(classific_report(y_true[1], y_pred[1]))
 print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
 
