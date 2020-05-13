@@ -18,7 +18,7 @@ from collections import defaultdict
 #from transformers import WarmupLinearSchedule
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
-from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags, _get_coherence, get_topics
+from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags, _get_coherence, get_topics, get_word_list
 from data import Corpus, Corpus_tok, Vocabulary
 from predict import predict_model
 
@@ -104,6 +104,8 @@ torch.cuda.manual_seed(args.seed);
 torch.backends.cudnn.deterministic = True
 print("Using device: {}".format(device))
 
+if args.prior_train == True:
+  print("Training Prior")
 
 
 # Produce or load the dataset
@@ -316,7 +318,7 @@ try:
             print("Best loss so far. Saving model.") 
             with open('{}/{}.pth'.format(path, args.output), 'wb') as f:
                 torch.save(model.state_dict(), f)
-            best_components = model.beta
+            #best_components = model.beta
         else:
             if not args.use_var_bptt and not args.no_lr_scaling:
                 optimizer.param_groups[0]['lr'] /= args.anneal_factor
@@ -379,6 +381,8 @@ for batch in tqdm(test_loader):
         i = 0
         for p in predicted: 
           tag_pred = extract_tags(p, id2tag)
+          #print("tag_pred", tag_pred)
+          #print("word_list[i]", word_list[i])
           test_pred.append((word_list[i], tag_pred))
           i += 1  
         for l in labels:
@@ -426,12 +430,13 @@ print("Words    :", word_list[1])
 print(classific_report(y_true[1], y_pred[1]))
 print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
 
-k=10 # Words to sample for each topic
+print("test_pred", test_pred[0])
+k=int(10) # Words to sample for each topic
 print("\n Compiling top {:.4f} words...".format(k))
-misc_words = [word for word, tag in test_pred if (tag == tag_ids['MISC'])]
-per_words = [word for word, tag in test_pred if (tag == tag_ids['PER'])]
-org_words = [word for word, tag in test_pred if (tag == tag_ids['ORG'])]
-loc_words = [word for word, tag in test_pred if (tag == tag_ids['LOC'])]
+misc_words, tuple_list = get_word_list(test_pred, 'MISC', rebuild=True)
+per_words, _           = get_word_list(tuple_list, 'PER')
+org_words, _           = get_word_list(tuple_list, 'ORG')
+loc_words, _           = get_word_list(tuple_list, 'LOC')
 misc_words_sample = np.random.choice(misc_words, k).tolist()
 per_words_sample = np.random.choice(per_words, k).tolist()
 org_words_sample = np.random.choice(org_words, k).tolist()
@@ -441,12 +446,13 @@ print("Top PER words:  ", per_words_sample)
 print("Top ORG words:  ", org_words_sample)
 print("Top LOC words:  ", loc_words_sample)
 
-n_components = args.num_topc - 1 # in estebandito (I think) it was the amount of topics, we subtract 1 because of 'O'
-topics = get_topics(best_components, n_components, corpus.vocabulary.idx2word, k=k)
+n_components = args.num_topic - 1 # in estebandito (I think) it was the amount of topics, we subtract 1 because of 'O'
+#topics = get_topics(best_components, n_components, corpus.vocabulary.idx2word, k=k)
 
 print("Estebandito get_topics: topics")
 
-co_score = _get_coherence(best_components, n_components, corpus.vocabulary.idx2word, k=k, topics=args.num_topic)
+co_score = 0
+#co_score = _get_coherence(best_components, n_components, corpus.vocabulary.idx2word, k=k, topics=args.num_topic)
 print("Mean Topic Coherence: ", co_score)
 
 print("Test Total Loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(test_loss, KLD, np.exp(test_loss), F1_full, co_score))
