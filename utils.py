@@ -184,6 +184,18 @@ def extract_tags(p, id2tag):
         tag = [id2tag[q.item()] for q in p] 
     return tag
 
+def get_word_list(tup_list, to_search, rebuild=False):
+  if rebuild:
+    list_o_tup = []
+    for i in tup_list:
+      for j in range(len(i[0])):
+        list_o_tup.append((i[0][j],i[1][j]))
+    topic_words = [word for word, tag in list_o_tup if (tag == to_search)]
+  else:
+    topic_words = [word for word, tag in tup_list if (tag == to_search)]
+    list_o_tup = []
+  return topic_words, list_o_tup
+
 def _get_coherence(best_components, n_components, idx2token, k=10, topics=5):
         """Get coherence using palmetto web service."""
         component_dists = best_components
