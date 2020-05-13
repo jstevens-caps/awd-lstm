@@ -13,11 +13,12 @@ import argparse
 
 from seqeval.metrics import classification_report
 from seqeval.metrics import f1_score
+from collections import defaultdict
 
 #from transformers import WarmupLinearSchedule
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
-from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags
+from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags, _get_coherence, get_topics
 from data import Corpus, Corpus_tok, Vocabulary
 from predict import predict_model
 
@@ -209,6 +210,7 @@ best_loss = np.inf
 best_epoch = 0
 train_losses = []
 valid_losses = []
+best_components = None
 
 # Training!
 print("Beginning training")
@@ -242,11 +244,8 @@ try:
 
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
-                # print("size of out", out.size())
                 raw_loss = criterion(out.view(-1, vocab_sz), y)
-                # print("size of y", y.size())
-                # print("out.view", out.view(-1, vocab_sz).size())
-                # print("raw_loss", raw_loss)
+
                 # AR/TAR
                 loss = raw_loss #+ loss_LDA
                 KL = KL.sum()
@@ -317,6 +316,7 @@ try:
             print("Best loss so far. Saving model.") 
             with open('{}/{}.pth'.format(path, args.output), 'wb') as f:
                 torch.save(model.state_dict(), f)
+            best_components = model.beta
         else:
             if not args.use_var_bptt and not args.no_lr_scaling:
                 optimizer.param_groups[0]['lr'] /= args.anneal_factor
@@ -426,13 +426,36 @@ print("Words    :", word_list[1])
 print(classific_report(y_true[1], y_pred[1]))
 print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
 
-print("Test Total Loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} ".format(test_loss, KLD, np.exp(test_loss), F1_full))
+k=10 # Words to sample for each topic
+print("\n Compiling top {:.4f} words...".format(k))
+misc_words = [word if (tag == tag_ids['MISC']) for word, tag in test_pred]
+per_words = [word if (tag == tag_ids['PER']) for word, tag in test_pred]
+org_words = [word if (tag == tag_ids['ORG']) for word, tag in test_pred]
+loc_words = [word if (tag == tag_ids['LOC']) for word, tag in test_pred]
+misc_words_sample = np.random.choice(misc_words, k).tolist()
+per_words_sample = np.random.choice(per_words, k).tolist()
+org_words_sample = np.random.choice(org_words, k).tolist()
+loc_words_sample = np.random.choice(loc_words, k).tolist()
+print("Top MISC words: ", misc_words_sample)
+print("Top PER words:  ", per_words_sample)
+print("Top ORG words:  ", org_words_sample)
+print("Top LOC words:  ", loc_words_sample)
+
+n_components = args.num_topc - 1 # in estebandito (I think) it was the amount of topics, we subtract 1 because of 'O'
+topics = get_topics(best_components, n_components, corpus.vocabulary.idx2word, k=k)
+
+print("Estebandito get_topics: topics")
+
+co_score = _get_coherence(best_components, n_components, corpus.vocabulary.idx2word, k=k, topics=args.num_topic)
+print("Mean Topic Coherence: ", co_score)
+
+print("Test Total Loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(test_loss, KLD, np.exp(test_loss), F1_full, co_score))
 
 # Saving graphs
 print("Saving loss data")
 pd.DataFrame(data={'train': train_losses, 'valid': valid_losses}).to_csv('{}/{}.csv'.format(path, args.output), index=False)
 with open('{}/{}.txt'.format(path, args.output), 'w') as f:
-    f.write("Best loss {:.4f} | Best ppl {:.4f} | Epoch {} | Test loss {:.4f} | Test ppl {:.4f}".format(best_loss, np.exp(best_loss), best_epoch, test_loss, np.exp(test_loss)))
+    f.write("Best loss {:.4f} | Best ppl {:.4f} | Epoch {} | Test loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(best_loss, np.exp(best_loss), best_epoch, test_loss, KLD, np.exp(test_loss), F1_full, co_score))
 
     
     
