@@ -2,6 +2,7 @@ import torch
 import torch.utils.data as data_utils
 import numpy as np
 from tqdm import tqdm
+from collections import defaultdict
 
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
@@ -183,6 +184,43 @@ def extract_tags(p, id2tag):
         tag = [id2tag[q.item()] for q in p] 
     return tag
 
+def _get_coherence(best_components, n_components, idx2token, k=10, topics=5):
+        """Get coherence using palmetto web service."""
+        component_dists = best_components
+        base_url = 'http://palmetto.aksw.org/palmetto-webapp/service/cv?words='
+        scores = []
+        i = 0
+        while i < topics:
+            t = np.random.randint(0, n_components)
+            _, idxs = torch.topk(component_dists[t], k)
+            component_words = [idx2token[idx]
+                               for idx in idxs.cpu().numpy()]
+            url = base_url + '%20'.join(component_words)
+            try:
+                score = float(requests.get(url, timeout=300).content)
+                scores += [score]
+                i += 1
+            except requests.exceptions.Timeout:
+                print("Attempted scoring timed out.  Trying again.")
+                continue
+        return np.mean(scores)
+
+def get_topics(best_components, n_components, idx2token, k=10):
+        """
+        Retrieve topic words.
+        Args
+            k : (int) number of words to return per topic, default 10.
+        """
+        assert k <= self.input_size, "k must be <= input size."
+        component_dists = best_components
+        topics = defaultdict(list)
+        for i in range(n_components):
+            _, idxs = torch.topk(component_dists[i], k)
+            component_words = [idx2token[idx]
+                               for idx in idxs.cpu().numpy()]
+            topics[i] = component_words
+        return topics
+    
 def accuracy(out, y):
     return torch.sum(torch.max(torch.softmax(out, dim=1), dim=1)[1] == y).item() / len(y)
     
