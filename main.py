@@ -428,10 +428,10 @@ print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
 
 k=10 # Words to sample for each topic
 print("\n Compiling top {:.4f} words...".format(k))
-misc_words = [word if (tag == tag_ids['MISC']) for word, tag in test_pred]
-per_words = [word if (tag == tag_ids['PER']) for word, tag in test_pred]
-org_words = [word if (tag == tag_ids['ORG']) for word, tag in test_pred]
-loc_words = [word if (tag == tag_ids['LOC']) for word, tag in test_pred]
+misc_words = [word for word, tag in test_pred if (tag == tag_ids['MISC'])]
+per_words = [word for word, tag in test_pred if (tag == tag_ids['PER'])]
+org_words = [word for word, tag in test_pred if (tag == tag_ids['ORG'])]
+loc_words = [word for word, tag in test_pred if (tag == tag_ids['LOC'])]
 misc_words_sample = np.random.choice(misc_words, k).tolist()
 per_words_sample = np.random.choice(per_words, k).tolist()
 org_words_sample = np.random.choice(org_words, k).tolist()
