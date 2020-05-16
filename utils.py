@@ -4,6 +4,8 @@ import numpy as np
 from tqdm import tqdm
 from collections import defaultdict
 
+from torch.utils.data import Dataset, DataLoader
+
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
 SOS_TOKEN = "<sos>"
@@ -41,11 +43,7 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     """
     # we get the max lenght sentence in a mini-batch to create the padding
     senntences, labels = data 
-    # convert these tensors into lists
-    sentences.to_list()
-    labels.to_list()
-
-    tok = np.array([([SOS_TOKEN] + sen.split() + [EOS_TOKEN]) for sen in sentences])
+    tok = np.array([(sen.split()) for sen in sentences])
     seq_lengths = [len(sen)-1 for sen in tok] 
     max_len = max(seq_lengths) 
     pad_id = vocab[PAD_TOKEN]  #pad token 
@@ -86,7 +84,7 @@ def create_batch(data, vocab, tag2id, device, word_dropout=0.):
     seq_length = seq_length.to(device) 
     tags = tags.to(device)
     
-    return batch_input, batch_output, tags, seq_mask, seq_length 
+    return batch_input, batch_output, tags #, seq_mask, seq_length 
 
 def get_batch(source, i, bptt, output_target=True):
     seq_len = min(bptt, len(source) - 1 - i)
@@ -105,9 +103,11 @@ def get_batch_tup(source, i, bptt):
 def get_loaders_tok(source, bs, bptt, vocab, tag2id, device, word_dropout=0., use_var_bptt=False): 
     # sentences, labels = source 
     #data = batchify(source, bs)
+    return source
     data = batchify_tup(source, bs)
     loader = []    
     i = 0
+
     while i < data[0].size(0) - 2:
         if use_var_bptt:
             rand_bptt = bptt if np.random.random() < 0.95 else bptt / 2. 
@@ -265,3 +265,57 @@ def produce_dataloaders(X_train, y_train, X_val, y_val, word2idx, vocab_set, msl
     val_loader = data_utils.DataLoader(val_set, bs, drop_last=drop_last)
     
     return train_loader, val_loader
+
+class Data_and_y_handler(Dataset):
+    def __init__(self, data, y):
+        self.data = data
+        self.y = y 
+    def __len__(self):
+        return len(data)
+    def __getitem__(self, idx):
+        # get words and label for a given instance index
+        return self.data[idx], self.y[idx]
+
+class SortingTextDataLoader:
+    """
+    A wrapper for the DataLoader class that sorts sentences by their
+    lengths in descending order.
+    """
+
+    def __init__(self, dataloader):
+        # we sort sentences for the optimization of the RNN code!
+        self.dataloader = dataloader
+        self.it = iter(dataloader)
+    
+    def __iter__(self):
+        return self
+
+    def __len__(self):
+        return len(self.dataloader)
+    
+    def __next__(self):
+        sentences = None
+        labels = None
+        for s,l in self.it:
+            sentences = s
+            labels = l
+            break
+
+        if sentences is None:
+            self.it = iter(self.dataloader)
+            raise StopIteration
+        if labels is None:
+            self.it = iter(self.dataloader)
+            raise StopIteration
+        
+        # Weird error, seems like sentences and labels are identical, 0 labels 1 sentences
+        #print("sentences", sentences)
+        #print("labels", labels)
+        sentences = np.array(sentences[1])
+        labels = np.array(labels[0])
+        sort_keys = sorted(range(len(sentences[1])), 
+                           key=lambda idx: len(sentences[1][idx].split()), 
+                           reverse=True)
+        sorted_sentences = sentences[1][sort_keys]
+        sorted_labels = labels[0][sort_keys]
+        return sorted_sentences, sorted_labels
