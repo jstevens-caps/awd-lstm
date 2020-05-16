@@ -5,17 +5,80 @@ from torch.utils.data import Dataset
 import codecs
 import re
 
+from utils import Data_and_y_handler
+
 UNK_TOKEN = "<unk>"
 PAD_TOKEN = "<pad>"
 SOS_TOKEN = "<sos>"
 EOS_TOKEN = "<eos>"
 tag_ids = {'MISC':0, 'LOC':1, 'PER':2, 'ORG':3, 'O':4}
 
+class TextDataset(Dataset): #You make sentences  
+    """ 
+       Loads a list of sentences into memory from a text file, 
+       split by newlines. 
+    """ 
+    def __init__(self, path, input_file, vocabulary, max_len=50, skip_dict=False, evalu=False):  
+        # by default the max number of words in a sentence is 50 words  
+        # we avoid processing very large mini-batches  
+        self.vocabulary = vocabulary
+        print("Loading file: ", input_file)
+        if not skip_dict:
+            self.vocabulary = from_data(os.path.join(path, input_file), self.vocabulary)   
+        self.data = []                  # sentences (ids) tensor  
+        self.y = []                     # labels tensor
+        self.sentence_words_total = []  # sentences (words) tensor
+
+        # open uft-8 files  
+        with codecs.open(os.path.join(path, input_file), 'r', encoding='utf8')  as f:  
+            sentence = [self.vocabulary.word2idx[SOS_TOKEN]]  
+            labels = [4]  # test_true, random number for class
+            sentence_words = [SOS_TOKEN]
+            for line in f:  
+                line = line.strip()  
+                    
+                if line: 
+                  #(token, tag) = re.split("\t", line)
+                  (word, word_type, tag) = re.split(" ", line)
+                  sentence_words.append(word)
+                  sentence.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else UNK_TOKEN])
+                  labels.append(tag_ids[tag]) 
+                else: 
+                  if len(sentence) > 0 and len(sentence) <= max_len: 
+                        sentence.append(self.vocabulary.word2idx[EOS_TOKEN]) 
+                        sentence_words.append(EOS_TOKEN)
+                        self.sentence_words_total.append(sentence_words)
+                        labels.append(4) # number to fill for the EOS token
+                        #print("sentence", sentence_words)
+                        # data.append(torch.tensor(sentence).type(torch.int64)) 
+                        # y.append(torch.tensor(labels).type(torch.int64))
+                        self.data.append(sentence)
+                        self.y.append(sentence) 
+                        self.sentence_words_total.append(sentence_words)
+                  sentence = [self.vocabulary.word2idx[SOS_TOKEN]] 
+                  labels = [4] # Number associated with random class 
+                  sentence_words = [SOS_TOKEN]                    
+            #data_ten = torch.cat(data)
+            #y_ten = torch.cat(y)
+            #print("data_ten", data_ten[:100])          
+        # if evalu:
+        #   return data_ten, y_ten, sentence_words_total
+        # return data_ten, y_ten
+                    
+
+    def __len__(self):
+        # overide len to get number of instances
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        # get words and label for a given instance index
+        return self.data[idx], self.y[idx]
+
 class Vocabulary(object):
     # may need to add something here in lines of dealing with tags
     def __init__(self):
-        self.word2idx = {'<unk>': 0, '<pad>': 1, '<eos>': 2}
-        self.idx2word = ['<unk>', '<pad>', '<eos>']
+        self.word2idx = {'<unk>': 0, '<pad>': 1, '<eos>': 2, '<sos>': 3}
+        self.idx2word = ['<unk>', '<pad>', '<eos>', '<sos>']
         self.vocab_set = set(self.idx2word)
 
     def __getitem__(self, key):
@@ -85,11 +148,14 @@ class Corpus_tok(object):
             self.vocabulary.vocab_set = set(idx2word)
 
         # This self.train/valid/test now consist of (sentences, labels), sentences split by newlines 
-        self.train = self.make_los(os.path.join(path, train_file), skip_dict=load_vocab, max_len=max_sen_len) 
-        self.valid = self.make_los(os.path.join(path, valid_file), skip_dict=load_vocab,  max_len=max_sen_len) 
-        sen_ids, labs, sen_words = self.make_los(os.path.join(path, test_file), skip_dict=load_vocab, max_len=max_sen_len, evalu=True)
-        self.test = sen_ids, labs
-        self.test_sentences = sen_words
+        train_tmp = self.make_los(os.path.join(path, train_file), skip_dict=load_vocab, max_len=max_sen_len) 
+        valid_tmp = self.make_los(os.path.join(path, valid_file), skip_dict=load_vocab,  max_len=max_sen_len) 
+        test_tmp = self.make_los(os.path.join(path, test_file), skip_dict=load_vocab, max_len=max_sen_len)
+        self.train = Data_and_y_handler(train_tmp[0], train_tmp[1])
+        self.valid = Data_and_y_handler(valid_tmp[0], valid_tmp[1])
+        self.test = Data_and_y_handler(test_tmp[0], test_tmp[1])
+        # self.test = sen_ids, labs
+        # self.test_sentences = sen_words
 #         self.train = self.tokenize(os.path.join(path, train_file), skip_dict=load_vocab)
 #         self.valid = self.tokenize(os.path.join(path, valid_file), skip_dict=load_vocab)
 #         self.test = self.tokenize(os.path.join(path, test_file), skip_dict=load_vocab)
@@ -131,15 +197,15 @@ class Corpus_tok(object):
         print("Loading file: ", input_file)
         if not skip_dict:
             self.vocabulary = from_data(input_file, self.vocabulary)   
-        data = []                  # sentences (ids)  
-        y = []                     # labels
-        sentence_words_total = []  # sentences (words)
+        data = []                  # sentences (ids) tensor  
+        y = []                     # labels tensor
+        sentence_words_total = []  # sentences (words) tensor
 
         # open uft-8 files  
         with codecs.open(input_file, 'r', encoding='utf8')  as f:  
-            sentence = []  
-            labels = []  # test_true
-            sentence_words = []
+            sentence = [self.vocabulary.word2idx[SOS_TOKEN]]  
+            labels = [4]  # test_true, random number for class
+            sentence_words = [SOS_TOKEN]
             for line in f:  
                 line = line.strip()  
                     
@@ -154,16 +220,25 @@ class Corpus_tok(object):
                         sentence.append(self.vocabulary.word2idx[EOS_TOKEN]) 
                         sentence_words.append(EOS_TOKEN)
                         sentence_words_total.append(sentence_words)
-                        data.append(torch.tensor(sentence).type(torch.int64)) 
-                        y.append(torch.tensor(labels).type(torch.int64)) 
-                  sentence = [] 
-                  labels = [] 
-                  sentence_words = []                    
-            data_ten = torch.cat(data)
-            y_ten = torch.cat(y)
+                        labels.append(4) # number to fill for the EOS token
+                        #print("sentence", sentence_words)
+                        # data.append(torch.tensor(sentence).type(torch.int64)) 
+                        # y.append(torch.tensor(labels).type(torch.int64))
+                        data.append(sentence)
+                        y.append(sentence) 
+                  sentence = [self.vocabulary.word2idx[SOS_TOKEN]] 
+                  labels = [4] # Number associated with random class 
+                  sentence_words = [SOS_TOKEN]                    
+            #data_ten = torch.cat(data)
+            #y_ten = torch.cat(y)
+            #print("data_ten", data_ten[:100])          
+        # if evalu:
+        #   return data_ten, y_ten, sentence_words_total
+        # return data_ten, y_ten
+        print("len data", len(data))
         if evalu:
-          return data_ten, y_ten, sentence_words_total
-        return data_ten, y_ten 
+          return data, y, sentence_words_total
+        return data, y  
 
     def __len__(self):
         # overide len to get number of instances
