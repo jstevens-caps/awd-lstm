@@ -10,6 +10,7 @@ import os
 from io import open
 import hashlib
 import argparse
+from torch.utils.data import Dataset, DataLoader
 
 from seqeval.metrics import classification_report
 from seqeval.metrics import f1_score
@@ -18,8 +19,8 @@ from collections import defaultdict
 #from transformers import WarmupLinearSchedule
 from transformers import get_linear_schedule_with_warmup
 from layers import RNNModel, AWDLSTMEncoder, DropoutLinearDecoder, LSTMEncoder, LinearDecoder
-from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags, _get_coherence, get_topics, get_word_list
-from data import Corpus, Corpus_tok, Vocabulary
+from utils import count_parameters, get_loaders, get_loaders_tok, drop_mult, extract_tags, _get_coherence, get_topics, get_word_list, create_batch, SortingTextDataLoader
+from data import Corpus, Corpus_tok, Vocabulary, TextDataset
 from predict import predict_model
 
 parser = argparse.ArgumentParser()
@@ -129,23 +130,33 @@ else:
 
 vocab_sz = len(corpus.vocabulary)  
 
-
 # Produce dataloaders
 if args.tokenized == 1:
     print("Producing train dataloader...")
-    train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
+    train_loader = TextDataset(path, args.train, corpus.vocabulary)
+    valid_loader = TextDataset(path, args.valid, train_loader.vocabulary)
+    test_loader = TextDataset(path, args.test, valid_loader.vocabulary)
+    corpus.vocabulary = test_loader.vocabulary
+    # train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
+    # valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    # test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    # print("train_loader", train_loader)
+    dlt = DataLoader(train_loader, batch_size=args.bs, shuffle=True)
+    sorted_dlt = SortingTextDataLoader(dlt)
     print("Producing val dataloader...")
-    valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    dlv = DataLoader(valid_loader, batch_size=args.bs, shuffle=True)
+    sorted_dlv = SortingTextDataLoader(dlv)
     print("Producing test dataloader...")
-    test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    dlte = DataLoader(test_loader, batch_size=args.bs)
+    sorted_dlte = SortingTextDataLoader(dlte)
 else:
     train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
     valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
     test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
+
 # Prepare arguments as input for encoder
 net_arch = args
-net_arch.num_input = 5920  
 print("Vocabulary Size:", vocab_sz)
 net_arch.device_tn = device
 
@@ -224,11 +235,14 @@ try:
         model.reset_hidden()
         train_loss = 0
         train_KL = 0 
-        with tqdm(total=len(train_loader)) as t:
-            for batch in train_loader:
-                if args.tokenized == 1:                 
-                  batch, tags = batch
-                x, y = batch
+        with tqdm(total=len(sorted_dlt)) as t:
+            for sentences, labels in sorted_dlt:
+
+                x, y, seq_mask, seq_len = create_batch(sentences, 
+                                                      labels, 
+                                                      corpus.vocabulary, 
+                                                      tag_ids, 
+                                                      device)
                 num_words += x.size(0) 
                 num_batch_words = x.size(0)
                 
