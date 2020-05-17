@@ -22,7 +22,7 @@ class TextDataset(Dataset): #You make sentences
         # by default the max number of words in a sentence is 50 words  
         # we avoid processing very large mini-batches  
         self.vocabulary = vocabulary
-        print("Loading file: ", input_file)
+        #print("Loading file: ", input_file)
         if not skip_dict:
             self.vocabulary = from_data(os.path.join(path, input_file), self.vocabulary)   
         self.data = []                  # sentences (ids) tensor  
@@ -32,7 +32,7 @@ class TextDataset(Dataset): #You make sentences
         # open uft-8 files  
         with codecs.open(os.path.join(path, input_file), 'r', encoding='utf8')  as f:  
             sentence = [self.vocabulary.word2idx[SOS_TOKEN]]  
-            labels = [4]  # test_true, random number for class
+            labels = ['O']  # test_true, random number for class
             sentence_words = [SOS_TOKEN]
             for line in f:  
                 line = line.strip()  
@@ -48,15 +48,15 @@ class TextDataset(Dataset): #You make sentences
                         sentence.append(self.vocabulary.word2idx[EOS_TOKEN]) 
                         sentence_words.append(EOS_TOKEN)
                         self.sentence_words_total.append(sentence_words)
-                        labels.append(4) # number to fill for the EOS token
+                        labels.append('O') # number to fill for the EOS token
                         #print("sentence", sentence_words)
                         # data.append(torch.tensor(sentence).type(torch.int64)) 
                         # y.append(torch.tensor(labels).type(torch.int64))
-                        self.data.append(sentence)
+                        self.data.append(sentence_words)
                         self.y.append(sentence) 
                         self.sentence_words_total.append(sentence_words)
                   sentence = [self.vocabulary.word2idx[SOS_TOKEN]] 
-                  labels = [4] # Number associated with random class 
+                  labels = ['O'] # Number associated with random class 
                   sentence_words = [SOS_TOKEN]                    
             #data_ten = torch.cat(data)
             #y_ten = torch.cat(y)
