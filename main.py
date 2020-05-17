@@ -141,10 +141,11 @@ if args.tokenized == 1:
     # valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
     # test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
     # print("train_loader", train_loader)
-    dlt = DataLoader(train_loader, batch_size=args.bs, shuffle=True)
+    print("train_loader", train_loader[0])
+    dlt = DataLoader(train_loader, batch_size=args.bs)
     sorted_dlt = SortingTextDataLoader(dlt)
     print("Producing val dataloader...")
-    dlv = DataLoader(valid_loader, batch_size=args.bs, shuffle=True)
+    dlv = DataLoader(valid_loader, batch_size=args.bs)
     sorted_dlv = SortingTextDataLoader(dlv)
     print("Producing test dataloader...")
     dlte = DataLoader(test_loader, batch_size=args.bs)
@@ -235,10 +236,13 @@ try:
         model.reset_hidden()
         train_loss = 0
         train_KL = 0 
-        with tqdm(total=len(sorted_dlt)) as t:
-            for sentences, labels in sorted_dlt:
-
-                x, y, seq_mask, seq_len = create_batch(sentences, 
+        with tqdm(total=len(dlt)) as t:
+            for batch in dlt:
+                sentences = batch[0]
+                print("sentences", sentences)
+                labels = batch[1]
+                #print("len sentences", sentences)
+                x, y, tags = create_batch(sentences, 
                                                       labels, 
                                                       corpus.vocabulary, 
                                                       tag_ids, 
@@ -247,17 +251,17 @@ try:
                 num_batch_words = x.size(0)
                 
                 # Scale learning rate to sequence length
-                if args.use_var_bptt and not args.no_lr_scaling:
-                    seq_len, _ = x.shape
-                    optimizer.param_groups[0]['lr'] = args.lr * seq_len / args.bptt
+                # if args.use_var_bptt and not args.no_lr_scaling:
+                #     seq_len, _ = x.shape
+                #     optimizer.param_groups[0]['lr'] = args.lr * seq_len / args.bptt
 
-                # # Adjust discriminative learning rates
-                for i in range(len(optimizer.param_groups)):
-                    optimizer.param_groups[i]['lr'] /= args.disc_rate ** i
+                # # # Adjust discriminative learning rates
+                # for i in range(len(optimizer.param_groups)):
+                #     optimizer.param_groups[i]['lr'] /= args.disc_rate ** i
 
                 x = x.to(device)
                 y = y.to(device)
-
+                print("size x", x.size())
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
                 raw_loss = criterion(out.view(-1, vocab_sz), y)
