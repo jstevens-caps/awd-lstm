@@ -134,27 +134,30 @@ vocab_sz = len(corpus.vocabulary)
 if args.tokenized == 1:
     print("Producing train dataloader...")
     train_loader = TextDataset(path, args.train, corpus.vocabulary)
-    valid_loader = TextDataset(path, args.valid, train_loader.vocabulary)
-    test_loader = TextDataset(path, args.test, valid_loader.vocabulary)
-    corpus.vocabulary = test_loader.vocabulary
-    # train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
-    # valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
-    # test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
-    # print("train_loader", train_loader)
-    print("train_loader", train_loader[0])
-    dlt = DataLoader(train_loader, batch_size=args.bs)
+    dlt = DataLoader(train_loader, batch_size=args.bs, drop_last=True)
     sorted_dlt = SortingTextDataLoader(dlt)
+    print("Num sentences train loader:", len(train_loader))
     print("Producing val dataloader...")
-    dlv = DataLoader(valid_loader, batch_size=args.bs)
+    valid_loader = TextDataset(path, args.valid, train_loader.vocabulary)
+    dlv = DataLoader(valid_loader, batch_size=args.bs, drop_last=True)
     sorted_dlv = SortingTextDataLoader(dlv)
+    print("Num sentences valid loader:", len(valid_loader))
     print("Producing test dataloader...")
-    dlte = DataLoader(test_loader, batch_size=args.bs)
+    test_loader = TextDataset(path, args.test, valid_loader.vocabulary)
+    dlte = DataLoader(test_loader, batch_size=args.bs, drop_last=True)
     sorted_dlte = SortingTextDataLoader(dlte)
+    corpus.vocabulary = test_loader.vocabulary
+    print("Num sentences test loader:", len(test_loader))
 else:
     train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
     valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
     test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
+    # train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
+    # valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    # test_loader  = get_loaders_tok(corpus.test, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
+    # print("train_loader", train_loader)
+    #print("train_loader", train_loader[0])
 
 # Prepare arguments as input for encoder
 net_arch = args
@@ -236,10 +239,9 @@ try:
         model.reset_hidden()
         train_loss = 0
         train_KL = 0 
-        with tqdm(total=len(dlt)) as t:
-            for batch in dlt:
+        with tqdm(total=len(sorted_dlt)) as t:
+            for batch in sorted_dlt:
                 sentences = batch[0]
-                print("sentences", sentences)
                 labels = batch[1]
                 #print("len sentences", sentences)
                 x, y, tags = create_batch(sentences, 
@@ -249,7 +251,7 @@ try:
                                                       device)
                 num_words += x.size(0) 
                 num_batch_words = x.size(0)
-                
+
                 # Scale learning rate to sequence length
                 # if args.use_var_bptt and not args.no_lr_scaling:
                 #     seq_len, _ = x.shape
@@ -302,12 +304,17 @@ try:
         KLD = 0
         num_val_batch = 0
         num_val_words = 0
-        for batch in tqdm(valid_loader):
+        for batch in tqdm(sorted_dlv):
             with torch.no_grad():
-                if args.tokenized == 1:                 
-                  batch, tags = batch
-                x, y = batch
-                
+                sentences = batch[0]
+                labels = batch[1]
+                #print("len sentences", sentences)
+                x, y, tags = create_batch(sentences, 
+                                                      labels, 
+                                                      corpus.vocabulary, 
+                                                      tag_ids, 
+                                                      device)
+                                                      
                 num_val_words += x.size(0) 
                 num_batch_words = x.size(0)
                 x = x.to(device)
@@ -368,11 +375,16 @@ y_true = []
 word_list = []
 id2tag = {v: k for k, v in tag_ids.items()}
 
-for batch in tqdm(test_loader): 
-    with torch.no_grad(): 
-        if args.tokenized == 1:         
-          batch, labels = batch  
-        x, y = batch 
+for batch in tqdm(sorted_dlv):
+  with torch.no_grad():
+        sentences = batch[0]
+        labels = batch[1]
+        #print("len sentences", sentences)
+        x, y, tags = create_batch(sentences, 
+                                  labels, 
+                                  corpus.vocabulary, 
+                                  tag_ids, 
+                                  device) 
 
         #sentences = [corpus.vocabulary.idx2word[idx] for idx in sentence_idxs]
         num_test_words += x.size(0) 
@@ -388,24 +400,37 @@ for batch in tqdm(test_loader):
         KLD += KL
 
         test_loss += loss.item()
-        probs = torch.softmax(p, -1)
+        # probs = torch.softmax(p, -1) # is allready softmaxed
         _, predicted = torch.max(p.data, -1) 
         predicted = predicted.squeeze(0)
 
-        for inst in x:
-          words = extract_tags(inst, corpus.vocabulary.idx2word) 
+        idx2word = corpus.vocabulary.idx2word
+        for inst in x.transpose(0,1):
+          #print("size x", inst.size())
+          #words = extract_tags(inst, corpus.vocabulary.idx2word) 
+          if len(inst) == 1:
+            words = [idx2word[inst.item()]]
+          else:
+            words = [idx2word[q.item()] for q in inst]
+            
           word_list.append(words)
 
         i = 0
-        for p in predicted: 
-          tag_pred = extract_tags(p, id2tag)
-          #print("tag_pred", tag_pred)
-          #print("word_list[i]", word_list[i])
+        for p in predicted.transpose(0,1):
+          if len(p) == 1:
+            tag_pred = p.item() 
+          else: 
+            tag_pred = [q.item() for q in p]
+          #tag_pred = extract_tags(p, id2tag)
           test_pred.append((word_list[i], tag_pred))
           i += 1  
-        for l in labels:
-          tag_true = extract_tags(l, id2tag)
-          y_true.append(tag_true)
+          #print("len tag_pred, sent", len(word_list[i]), len(tag_pred))
+        l = labels.tolist()
+        y_true.append(l[0].split(' '))
+
+        # for l in labels:
+        #   tag_true = extract_tags(l, id2tag)
+        #   y_true.append(tag_true)
 
 def classific_report(y_true, y_pred): 
   if len(y_pred) == 1 or len(y_true) == 1: 
@@ -415,8 +440,30 @@ def classific_report(y_true, y_pred):
 test_loss /= num_test_words
 KLD /= num_test_words 
  
+#print("instance of test pred", test_pred[0])
+#print("len sent, len pred", len(test_pred[0][0]), len(test_pred[0][1]))
+
 # extract predictions from tuple (sentence, tags)
 y_pred = [j for _,j in test_pred] 
+
+k=int(10) # Words to sample for each topic
+print("\n Compiling top {:.4f} words...".format(k))
+grand_total = [[] for topic in range(args.num_topic)]
+for inst in test_pred:
+  sen_len = len(inst[0])
+  if sen_len != len(inst[1]):
+    print(inst[0], inst[1])
+  for i in range(sen_len):
+    word = inst[0][i]
+    tag = inst[1][i]
+    if word != PAD_TOKEN and word != EOS_TOKEN and word != SOS_TOKEN:
+      grand_total[tag].append(word) # add word to list in index of its tag
+print("grand total sample", grand_total[0][:20])
+
+for i in range(args.num_topic):
+  print("Top {:.4f} words of cluster indexed {:.4f}:".format(k, i))
+  print(np.random.choice(grand_total[i], k))
+  
 
 # Remove EOS tokens from y_pred and word_list:
 # for instance in range(len(word_list)):
