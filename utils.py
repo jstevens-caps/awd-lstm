@@ -42,8 +42,7 @@ def create_batch(sentences, labels, vocab, tag2id, device, word_dropout=0.):
     :returns: a batch of padded inputs, a batch of outputs, mask, lengths
     """
     # we get the max lenght sentence in a mini-batch to create the padding
-    #tok = np.array([(sen.split()) for sen in sentences])
-    tok = sentences
+    tok = np.array([(sen.split()) for sen in sentences])
     seq_lengths = [len(sen)-1 for sen in tok] 
     max_len = max(seq_lengths) 
     pad_id = vocab[PAD_TOKEN]  #pad token 
@@ -52,11 +51,11 @@ def create_batch(sentences, labels, vocab, tag2id, device, word_dropout=0.):
         [vocab[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
             for idx, sen in enumerate(tok)]
     # we do the same for the labels
-    # tags = np.array([l.split() for l in labels])  
-    tags = labels
-    # tag_output = [
-    #     [tag2id[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
-    #         for idx, sen in enumerate(tags)]
+    tags = np.array([l.split() for l in labels])  
+    #tags = labels
+    tag_output = [
+       [tag2id[sen[t]] if t < seq_lengths[idx] else pad_id for t in range(max_len)]
+           for idx, sen in enumerate(tags)]
     # Replace words of the input with <unk> with p = word_dropout.
     if word_dropout > 0.:
         unk_id = vocab[UNK_TOKEN]
@@ -72,7 +71,7 @@ def create_batch(sentences, labels, vocab, tag2id, device, word_dropout=0.):
     # Convert everything to PyTorch tensors
     batch_input = torch.tensor(pad_id_input).transpose(0,1)
     batch_output = torch.tensor(pad_id_output).transpose(0,1).reshape((-1,))
-    #tags = torch.tensor(tag_output)
+    tags = torch.tensor(tag_output)
     # define sequence mask to know what is a word and what is padding
     # this is used to mask the loss and we do not end up taking into account empty sequences
     #seq_mask = (batch_input != vocab[PAD_TOKEN])
@@ -83,7 +82,7 @@ def create_batch(sentences, labels, vocab, tag2id, device, word_dropout=0.):
     batch_output = batch_output.to(device) 
     #seq_mask = seq_mask.to(device) 
     seq_length = seq_length.to(device) 
-    #tags = tags.to(device)
+    tags = tags.to(device)
     
     return batch_input, batch_output, tags #, seq_mask, seq_length 
 
@@ -309,14 +308,38 @@ class SortingTextDataLoader:
             self.it = iter(self.dataloader)
             raise StopIteration
         
-        # Weird error, seems like sentences and labels are identical, 0 labels 1 sentences
-        #print("sentences", sentences)
-        #print("labels", labels)
-        sentences = np.array(sentences[1])
-        labels = np.array(labels[0])
+        sentences = np.array(sentences)
+        labels = np.array(labels)
         sort_keys = sorted(range(len(sentences)), 
-                           #key=lambda idx: len(sentences[idx].split()), 
+                           key=lambda idx: len(sentences[idx].split()), 
                            reverse=True)
         sorted_sentences = sentences[sort_keys]
         sorted_labels = labels[sort_keys]
-        return (sorted_sentences, sorted_labels)
+        return sorted_sentences, sorted_labels
+
+    # def __next__(self):
+    #     sentences = None
+    #     labels = None
+    #     for s,l in self.it:
+    #         sentences = s
+    #         labels = l
+    #         break
+
+    #     if sentences is None:
+    #         self.it = iter(self.dataloader)
+    #         raise StopIteration
+    #     if labels is None:
+    #         self.it = iter(self.dataloader)
+    #         raise StopIteration
+        
+    #     # Weird error, seems like sentences and labels are identical, 0 labels 1 sentences
+    #     #print("sentences", sentences)
+    #     #print("labels", labels)
+    #     sentences = np.array(sentences[1])
+    #     labels = np.array(labels[0])
+    #     sort_keys = sorted(range(len(sentences)), 
+    #                        #key=lambda idx: len(sentences[idx].split()), 
+    #                        reverse=True)
+    #     sorted_sentences = sentences[sort_keys]
+    #     sorted_labels = labels[sort_keys]
+    #     return (sorted_sentences, sorted_labels)
