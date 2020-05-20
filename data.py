@@ -40,21 +40,20 @@ class TextDataset(Dataset): #You make sentences
                 if line: 
                   #(token, tag) = re.split("\t", line)
                   (word, word_type, tag) = re.split(" ", line)
-                  sentence_words.append(word)
                   sentence.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else UNK_TOKEN])
-                  labels.append(tag_ids[tag]) 
+                  sentence_words.append(word)
+                  labels.append(tag) 
                 else: 
                   if len(sentence) > 0 and len(sentence) <= max_len: 
                         sentence.append(self.vocabulary.word2idx[EOS_TOKEN]) 
-                        sentence_words.append(EOS_TOKEN)
-                        self.sentence_words_total.append(sentence_words)
+                        sentence_words.append(EOS_TOKEN)                  
                         labels.append('O') # number to fill for the EOS token
                         #print("sentence", sentence_words)
                         # data.append(torch.tensor(sentence).type(torch.int64)) 
                         # y.append(torch.tensor(labels).type(torch.int64))
-                        self.data.append(sentence_words)
-                        self.y.append(sentence) 
-                        self.sentence_words_total.append(sentence_words)
+                        #self.data.append(sentence_words)
+                        self.y.append(' '.join(labels)) 
+                        self.data.append(' '.join(sentence_words))
                   sentence = [self.vocabulary.word2idx[SOS_TOKEN]] 
                   labels = ['O'] # Number associated with random class 
                   sentence_words = [SOS_TOKEN]                    
@@ -235,7 +234,7 @@ class Corpus_tok(object):
         # if evalu:
         #   return data_ten, y_ten, sentence_words_total
         # return data_ten, y_ten
-        print("len data", len(data))
+        #print("len data", len(data))
         if evalu:
           return data, y, sentence_words_total
         return data, y  
