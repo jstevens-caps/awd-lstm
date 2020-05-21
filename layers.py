@@ -116,11 +116,11 @@ class AWDLSTMEncoder(nn.Module):
         #prior_mean   = torch.Tensor(1, ac.num_topic).fill_(0)
         if prior_train:
             self.prior_mean   = nn.Parameter(torch.zeros((1, ac.num_topic)), requires_grad=True).cuda()
-            self.prior_var    = nn.Parameter(torch.ones((5,)), requires_grad=True).cuda()
+            self.prior_var    = nn.Parameter(torch.ones((ac.num_topic,)), requires_grad=True).cuda()
             self.prior_logvar = nn.Parameter(self.prior_var.log(), requires_grad=True)
         else:
             self.prior_mean   = nn.Parameter(torch.zeros((1, ac.num_topic)), requires_grad=False).cuda()
-            self.prior_var    = nn.Parameter(torch.ones((5,)), requires_grad=False).cuda()
+            self.prior_var    = nn.Parameter(torch.ones((ac.num_topic,)), requires_grad=False).cuda()
             self.prior_logvar = nn.Parameter(self.prior_var.log(), requires_grad=False)
         #prior_var    = torch.Tensor(1, ac.num_topic).fill_(ac.variance)
            
