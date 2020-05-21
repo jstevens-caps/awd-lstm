@@ -44,11 +44,11 @@ parser.add_argument('--decoder', type=str, default='dropoutlinear', choices=['dr
 parser.add_argument('--emb_dim', type=int, default=400, help='embedding dimensions')
 parser.add_argument('--hidden_dim', type=int, default=1152, help='hidden dimensions')
 parser.add_argument('--num_layers', type=int, default=3, help='number of rnn layers')
-parser.add_argument('--emb_dp', type=float, default=0.1, help='embeddng dropout')
-parser.add_argument('--hidden_dp', type=float, default=0.3, help='hidden to hidden dropout')
-parser.add_argument('--input_dp', type=float, default=0.3, help='input dropout')
-parser.add_argument('--weight_dp', type=float, default=0.5, help='dropconnect dropout')
-parser.add_argument('--out_dp', type=float, default=0.4, help='output dropout')
+parser.add_argument('--emb_dp', type=float, default=0.2, help='embeddng dropout')
+parser.add_argument('--hidden_dp', type=float, default=0.2, help='hidden to hidden dropout')
+parser.add_argument('--input_dp', type=float, default=0.2, help='input dropout')
+parser.add_argument('--weight_dp', type=float, default=0.2, help='dropconnect dropout')
+parser.add_argument('--out_dp', type=float, default=0.2, help='output dropout')
 parser.add_argument('--initrange', type=float, default=0.05, help='initialization range')
 parser.add_argument('--tie_weights', action='store_true', help='tie embeddings and decoder weights')
 parser.add_argument('--use_pretrained', action='store_true', help='use pretrained weights')
@@ -263,7 +263,7 @@ try:
 
                 x = x.to(device)
                 y = y.to(device)
-                print("size x", x.size())
+
                 out = model(x, return_states=True)
                 if args.encoder == 'awd_lstm': out, hidden, raw_out, dropped_out, p, KL = out
                 raw_loss = criterion(out.view(-1, vocab_sz), y)
@@ -373,6 +373,7 @@ num_sentences = 0
 test_pred = []
 y_true = []
 word_list = []
+tag_list = []
 id2tag = {v: k for k, v in tag_ids.items()}
 
 for batch in tqdm(sorted_dlv):
@@ -422,7 +423,7 @@ for batch in tqdm(sorted_dlv):
           else: 
             tag_pred = [q.item() for q in p]
           #tag_pred = extract_tags(p, id2tag)
-          test_pred.append((word_list[i], tag_pred))
+          tag_list.append(tag_pred)
           i += 1  
           #print("len tag_pred, sent", len(word_list[i]), len(tag_pred))
         l = labels.tolist()
@@ -432,38 +433,38 @@ for batch in tqdm(sorted_dlv):
         #   tag_true = extract_tags(l, id2tag)
         #   y_true.append(tag_true)
 
-def classific_report(y_true, y_pred): 
-  if len(y_pred) == 1 or len(y_true) == 1: 
-    return "Cant classify, only one element" 
-  else: return classification_report(y_true, y_pred) 
-
 test_loss /= num_test_words
 KLD /= num_test_words 
  
 #print("instance of test pred", test_pred[0])
 #print("len sent, len pred", len(test_pred[0][0]), len(test_pred[0][1]))
 
+for i in range(len(word_list)):
+  test_pred.append((word_list[i], tag_list[i]))
+
 # extract predictions from tuple (sentence, tags)
 y_pred = [j for _,j in test_pred] 
 
-k=int(10) # Words to sample for each topic
-print("\n Compiling top {:.4f} words...".format(k))
+k=int(20) # Words to sample for each topic
+print("\n Compiling top {:.0f} words...".format(k))
 grand_total = [[] for topic in range(args.num_topic)]
 for inst in test_pred:
   sen_len = len(inst[0])
-  if sen_len != len(inst[1]):
-    print(inst[0], inst[1])
   for i in range(sen_len):
     word = inst[0][i]
     tag = inst[1][i]
     if word != PAD_TOKEN and word != EOS_TOKEN and word != SOS_TOKEN:
       grand_total[tag].append(word) # add word to list in index of its tag
-print("grand total sample", grand_total[0][:20])
 
+topwords = []
 for i in range(args.num_topic):
-  print("Top {:.4f} words of cluster indexed {:.4f}:".format(k, i))
-  print(np.random.choice(grand_total[i], k))
-  
+  topwords.append(np.random.choice(grand_total[i], k))
+  print("Top {:.0f} words of cluster indexed {:.0f}: {}".format(k, i, topwords[i]))
+
+# def classific_report(y_true, y_pred): 
+#   if len(y_pred) == 1 or len(y_true) == 1: 
+#     return "Cant classify, only one element" 
+#   else: return classification_report(y_true, y_pred) 
 
 # Remove EOS tokens from y_pred and word_list:
 # for instance in range(len(word_list)):
@@ -472,49 +473,50 @@ for i in range(args.num_topic):
 #   word_list[instance] = [i for j, i in enumerate(word_list[instance]) if j not in indices]
 
 # Eval full dataset on F1, precision and recall
-print("\nEvaluating on full test dataset")
-print(classific_report(y_true, y_pred))
-F1_full = f1_score(y_true, y_pred)
-print('F1 full: %.3f '%F1_full)
+# print("\nEvaluating on full test dataset")
+# print(classific_report(y_true, y_pred))
+F1_full = 0
+# F1_full = f1_score(y_true, y_pred)
+# print('F1 full: %.3f '%F1_full)
 
-# eval on one instance 
-print("\nEvaluating on instance 0")
-print("len predicted", len(y_pred[0]))
-print("len true     ", len(y_true[0]))
-print("len words    ", len(word_list[0]))
-print("Predicted:", y_pred[0])
-print("True     :", y_true[0])
-print("Words    :", word_list[0])
-print(classific_report(y_true[0], y_pred[0]))
-print('F1 0: %.3f '%f1_score(y_true[0], y_pred[0]))
+# # eval on one instance 
+# print("\nEvaluating on instance 0")
+# print("len predicted", len(y_pred[0]))
+# print("len true     ", len(y_true[0]))
+# print("len words    ", len(word_list[0]))
+# print("Predicted:", y_pred[0])
+# print("True     :", y_true[0])
+# print("Words    :", word_list[0])
+# print(classific_report(y_true[0], y_pred[0]))
+# print('F1 0: %.3f '%f1_score(y_true[0], y_pred[0]))
 
-print("\nEvaluating on instance 1")
-print("Predicted:", y_pred[1])
-print("True     :", y_true[1])
-print("Words    :", word_list[1])
-print(classific_report(y_true[1], y_pred[1]))
-print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
+# print("\nEvaluating on instance 1")
+# print("Predicted:", y_pred[1])
+# print("True     :", y_true[1])
+# print("Words    :", word_list[1])
+# print(classific_report(y_true[1], y_pred[1]))
+# print('F1 1: %.3f '%f1_score(y_true[1], y_pred[1]))
 
-print("test_pred", test_pred[0])
-k=int(10) # Words to sample for each topic
-print("\n Compiling top {:.4f} words...".format(k))
-misc_words, tuple_list = get_word_list(test_pred, 'MISC', rebuild=True)
-per_words, _           = get_word_list(tuple_list, 'PER')
-org_words, _           = get_word_list(tuple_list, 'ORG')
-loc_words, _           = get_word_list(tuple_list, 'LOC')
-misc_words_sample = np.random.choice(misc_words, k).tolist()
-per_words_sample = np.random.choice(per_words, k).tolist()
-org_words_sample = np.random.choice(org_words, k).tolist()
-loc_words_sample = np.random.choice(loc_words, k).tolist()
-print("Top MISC words: ", misc_words_sample)
-print("Top PER words:  ", per_words_sample)
-print("Top ORG words:  ", org_words_sample)
-print("Top LOC words:  ", loc_words_sample)
+# print("test_pred", test_pred[0])
+# k=int(10) # Words to sample for each topic
+# print("\n Compiling top {:.4f} words...".format(k))
+# misc_words, tuple_list = get_word_list(test_pred, 'MISC', rebuild=True)
+# per_words, _           = get_word_list(tuple_list, 'PER')
+# org_words, _           = get_word_list(tuple_list, 'ORG')
+# loc_words, _           = get_word_list(tuple_list, 'LOC')
+# misc_words_sample = np.random.choice(misc_words, k).tolist()
+# per_words_sample = np.random.choice(per_words, k).tolist()
+# org_words_sample = np.random.choice(org_words, k).tolist()
+# loc_words_sample = np.random.choice(loc_words, k).tolist()
+# print("Top MISC words: ", misc_words_sample)
+# print("Top PER words:  ", per_words_sample)
+# print("Top ORG words:  ", org_words_sample)
+# print("Top LOC words:  ", loc_words_sample)
 
-n_components = args.num_topic - 1 # in estebandito (I think) it was the amount of topics, we subtract 1 because of 'O'
-#topics = get_topics(best_components, n_components, corpus.vocabulary.idx2word, k=k)
+# n_components = args.num_topic - 1 # in estebandito (I think) it was the amount of topics, we subtract 1 because of 'O'
+# #topics = get_topics(best_components, n_components, corpus.vocabulary.idx2word, k=k)
 
-print("Estebandito get_topics: topics")
+# print("Estebandito get_topics: topics")
 
 co_score = 0
 #co_score = _get_coherence(best_components, n_components, corpus.vocabulary.idx2word, k=k, topics=args.num_topic)
@@ -527,6 +529,7 @@ print("Saving loss data")
 pd.DataFrame(data={'train': train_losses, 'valid': valid_losses}).to_csv('{}/{}.csv'.format(path, args.output), index=False)
 with open('{}/{}.txt'.format(path, args.output), 'w') as f:
     f.write("Best loss {:.4f} | Best ppl {:.4f} | Epoch {} | Test loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(best_loss, np.exp(best_loss), best_epoch, test_loss, KLD, np.exp(test_loss), F1_full, co_score))
-
+    for i in range(args.num_topic):
+      f.write("Top {:.0f} words of cluster indexed {:.0f}: {}".format(k, i, topwords[i]))
     
     
