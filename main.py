@@ -281,7 +281,7 @@ try:
                 # print("Train KL", KL.sum())
                 optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+                #nn.utils.clip_grad_norm_(model.parameters(), args.clip)
                 optimizer.step()
                 t.set_postfix({'lr{}'.format(i): optimizer.param_groups[i]['lr'] for i in range(len(optimizer.param_groups))})
                 if scheduler is not None: scheduler.step()
