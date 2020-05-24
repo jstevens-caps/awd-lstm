@@ -1,22 +1,10 @@
-# AWD-LSTM and ULMFiT Toolkit
-**Note: This is a work in progress!**
+# AWD-LSTM and AVITM
 
-This repository contains partial (so far) reproductions of the following papers:
+This repository contains the code for the capstone project of Jasper Stevens, supervised by Dr. Miguel Rios Goana. 
+The code in this repository allows you to train a latent variable model used to predict named entity types on the CONLL Dutch dataset.
+This code is inspired by the following papers:
 * [Regularizing and Optimizing LSTM Language Models](https://arxiv.org/abs/1708.02182) (Merity et al., 2017).
-* [Universal Language Model Finetuning for Text Classification](https://arxiv.org/abs/1801.06146) (Howard & Ruder, 2018) 
-
-Code in this repository allows you to:
-1. Train AWD-LSTM language models;
-2. Finetune language models on other datasets; and
-3. Finetune language models for text classification (ULMFiT)
-
-In addition, you can use the layers written in ```layers.py``` for your own work. Details are provided below.
-
-This repository is a work in progress and so not all techniques have been added. Please see the **To-do** section below to see what has not been added yet. Below is also a tracker on the current reproduced scores compared to the papers' original scores.
-
-**Current Results**
-* AWD-LSTM on WikiText-2 - Current Test PPL: 74.2074 / **Target Test PPL: 65.8** / Difference: 8.4074
-* ULMFiT on iMDB - Current Accuracy: 92.11% / **Target Accuracy: 95.4%** / Difference: 3.29
+* [Autoencoding Variational Inference for Topic Models](https://arxiv.org/pdf/1703.01488) (Srivastava & Sutton, 2017) 
 
 # Requirements
 Libraries you need:
@@ -29,28 +17,12 @@ Libraries you need:
 Hardware you need:
 * A GPU with at least 11 GB - All the results in this repository have been produced on machines with NVIDIA GTX 1080Ti and servers with NVIDIA Tesla P100 GPUs. A lot of the models when training do take about 10 GB of memory. You *could* get away with a smaller and slower GPU but do note that this affects your speed and performance.
 
-# Using the Training Scripts for Language Modeling
-The scripts can be used for language modeling, following the ideas proposed in Merity et al. (2017). Here are a few examples on WikiText-2:
+# Using the Training Scripts
+Here are a few examples 
 
-Train an AWD-LSTM using SGD with variable BPTT lengths (Valid PPL: 77.8227 / Test PPL: 74.2074)
+``` 
+python awd-lstm/main.py --rebuild_dataset --lr=1e-3 --num-topic=5 --epochs=2 --bs=80 --bptt=80 --eval_bs=80 --num_layers=3 --optimizer='adam' --en1-units=400 --en2-units=400 --path=awd-lstm/data/conll2002 --train=ned.train_mod --valid=ned.testb_mod --test=ned.testa_mod --output=pretrained_wt2_jasper --tie_weights --save_vocab --vocab_file=vocab.pth --gpu=0
 ```
-python awd-lstm/main.py --path=data/wikitext-2 --train=wiki.train.tokens --valid=wiki.valid.tokens --test=wiki.test.tokens --output=pretrained_wt2 --bs=80 --bptt=80 --epochs=150 --use_var_bptt --tie_weights --save_vocab --vocab_file=vocab.pth --gpu=0
-```
-
-Train an AWD-LSTM using Adam+LinearWarmup with variable BPTT lengths (Valid PPL: 85.3083 / Test PPL: 80.9872)
-```
-python awd-lstm/main.py --path=data/wikitext-2 --train=wiki.train.tokens --valid=wiki.valid.tokens --test=wiki.test.tokens --output=pretrained_wt2 --bs=80 --bptt=80 --epochs=150 --use_var_bptt --tie_weights --optimizer=adam --lr=3e-4 --warmup_pct=0.1 --save_vocab --vocab_file=vocab.pth --gpu=0
-```
-
-Alternatively, you can test language modeling by training a simple LSTM baseline. Here is an example:
-
-Train a basic LSTM using SGD without variable BPTT lengths (Valid PPL: 101.1345 / Test PPL: 95.7615)
-```
-python awd-lstm/main.py --path=data/wikitext-2 --train=wiki.train.tokens --valid=wiki.valid.tokens --test=wiki.test.tokens --output=basic_wt2 --bs=80 --bptt=80 --epochs=100 --tie_weights --encoder=lstm --decoder=linear --lr=20 --save_vocab --vocab_file=vocab.pth --gpu=0
-
-```
-
-This is also how language model pretraining works. Be sure to use the ```--save_vocab``` argument to save your vocabularies.
 
 # Generation
 You can use your pretrained models to generate text. Here is an example:
@@ -140,29 +112,3 @@ Version 0.2
 
 Version 0.1
 * Added basic training functionality
-
-# To-do and Current Progress
-As said, this repository is a work in progress. There will be some features missing. Here are the missing features:
-
-For AWD-LSTM training:
-* NT-ASGD not implemented
-
-For ULMFiT:
-* Special tokens
-* Embeddings vocabulary adaptation
-
-Miscellany
-* Distributed training
-
-For now, ULMFiT achieves a validation accuracy of 92.11%, which is 3.29 points below the paper's original result of 95.4%. I surmise that this score will get closer once I add in all the missing features. For now, the repo is a partial reproduction.
-
-The pretrained WikiText-103 model used in the results was also adapted from FastAI. I will update with newer scores once I add in distributed pretraining to train my own language model.
-
-
-# Credits
-Credits are due to the following:
-* The contributors at FastAI where I adapted the dropout code from.
-* The people at HuggingFace responsible for their amazing Transformers library.
-
-# Issues and Contributing
-If you find an issue, please do let me know in the issues tab! Help and suggestions are also very much welcome.
