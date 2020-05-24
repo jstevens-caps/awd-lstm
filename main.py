@@ -135,23 +135,23 @@ if args.tokenized == 1:
     print("Producing train dataloader...")
     train_loader = TextDataset(path, args.train, corpus.vocabulary)
     dlt = DataLoader(train_loader, batch_size=args.bs, drop_last=True)
-    sorted_dlt = SortingTextDataLoader(dlt)
+    train_data = SortingTextDataLoader(dlt)
     print("Num sentences train loader:", len(train_loader))
     print("Producing val dataloader...")
     valid_loader = TextDataset(path, args.valid, train_loader.vocabulary)
     dlv = DataLoader(valid_loader, batch_size=args.bs, drop_last=True)
-    sorted_dlv = SortingTextDataLoader(dlv)
+    valid_data = SortingTextDataLoader(dlv)
     print("Num sentences valid loader:", len(valid_loader))
     print("Producing test dataloader...")
     test_loader = TextDataset(path, args.test, valid_loader.vocabulary)
     dlte = DataLoader(test_loader, batch_size=args.bs, drop_last=True)
-    sorted_dlte = SortingTextDataLoader(dlte)
+    test_data = SortingTextDataLoader(dlte)
     corpus.vocabulary = test_loader.vocabulary
     print("Num sentences test loader:", len(test_loader))
 else:
-    train_loader = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
-    valid_loader = get_loaders(corpus.valid, args.eval_bs, args.bptt)
-    test_loader = get_loaders(corpus.test, args.eval_bs, args.bptt)
+    train_data = get_loaders(corpus.train, args.bs, args.bptt, use_var_bptt=args.use_var_bptt)
+    valid_data = get_loaders(corpus.valid, args.eval_bs, args.bptt)
+    test_data = get_loaders(corpus.test, args.eval_bs, args.bptt)
 
     # train_loader = get_loaders_tok(corpus.train, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0., use_var_bptt=args.use_var_bptt)
     # valid_loader = get_loaders_tok(corpus.valid, args.bs, args.bptt, corpus.vocabulary, tag_ids, device, word_dropout=0.)
@@ -212,7 +212,7 @@ if args.optimizer == 'sgd':
     optimizer = optim.SGD(p_groups, lr=args.lr)
 elif args.optimizer == 'adam':
     optimizer = optim.Adam(p_groups, lr=1e-3)
-    steps = len(train_loader) * args.epochs
+    steps = len(train_data) * args.epochs
     if not args.no_warmup:
         scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(steps * args.warmup_pct), num_training_steps = steps)
         #scheduler = WarmupLinearSchedule(optimizer, warmup_steps=int(steps * args.warmup_pct), t_total=steps)
@@ -239,16 +239,19 @@ try:
         model.reset_hidden()
         train_loss = 0
         train_KL = 0 
-        with tqdm(total=len(sorted_dlt)) as t:
-            for batch in sorted_dlt:
-                sentences = batch[0]
-                labels = batch[1]
+        with tqdm(total=len(train_data)) as t:
+            for batch in train_data:
                 #print("len sentences", sentences)
-                x, y, tags = create_batch(sentences, 
+                if args.tokenized == 1:
+                  sentences = batch[0]
+                  labels = batch[1]
+                  x, y, tags = create_batch(sentences, 
                                                       labels, 
                                                       corpus.vocabulary, 
                                                       tag_ids, 
                                                       device)
+                else:
+                  x, y = batch
                 num_words += x.size(0) 
                 num_batch_words = x.size(0)
 
@@ -298,22 +301,24 @@ try:
         train_KL /= num_words
         train_losses.append(train_loss)
 
-        model.eval()
+        model.eval() 
         model.reset_hidden()
-        valid_loss = 0
-        KLD = 0
+        valid_loss = 0 
+        KLD = 0 
         num_val_batch = 0
         num_val_words = 0
-        for batch in tqdm(sorted_dlv):
+        for batch in tqdm(valid_data):
             with torch.no_grad():
-                sentences = batch[0]
-                labels = batch[1]
-                #print("len sentences", sentences)
-                x, y, tags = create_batch(sentences, 
+                if args.tokenized == 1:
+                  sentences = batch[0]
+                  labels = batch[1]
+                  x, y, tags = create_batch(sentences, 
                                                       labels, 
                                                       corpus.vocabulary, 
                                                       tag_ids, 
                                                       device)
+                else:
+                  x, y = batch
                                                       
                 num_val_words += x.size(0) 
                 num_batch_words = x.size(0)
@@ -376,16 +381,18 @@ word_list = []
 tag_list = []
 id2tag = {v: k for k, v in tag_ids.items()}
 
-for batch in tqdm(sorted_dlv):
+for batch in tqdm(test_data):
   with torch.no_grad():
-        sentences = batch[0]
-        labels = batch[1]
-        #print("len sentences", sentences)
-        x, y, tags = create_batch(sentences, 
+        if args.tokenized == 1:
+          sentences = batch[0]
+          labels = batch[1]
+          x, y, tags = create_batch(sentences, 
                                   labels, 
                                   corpus.vocabulary, 
                                   tag_ids, 
                                   device) 
+        else:
+          x, y = batch
 
         #sentences = [corpus.vocabulary.idx2word[idx] for idx in sentence_idxs]
         num_test_words += x.size(0) 
@@ -404,7 +411,6 @@ for batch in tqdm(sorted_dlv):
         # probs = torch.softmax(p, -1) # is allready softmaxed
         _, predicted = torch.max(p.data, -1) 
         predicted = predicted.squeeze(0)
-
         idx2word = corpus.vocabulary.idx2word
         for inst in x.transpose(0,1):
           #print("size x", inst.size())
@@ -413,10 +419,9 @@ for batch in tqdm(sorted_dlv):
             words = [idx2word[inst.item()]]
           else:
             words = [idx2word[q.item()] for q in inst]
-            
           word_list.append(words)
 
-        i = 0
+
         for p in predicted.transpose(0,1):
           if len(p) == 1:
             tag_pred = p.item() 
@@ -424,10 +429,14 @@ for batch in tqdm(sorted_dlv):
             tag_pred = [q.item() for q in p]
           #tag_pred = extract_tags(p, id2tag)
           tag_list.append(tag_pred)
-          i += 1  
-          #print("len tag_pred, sent", len(word_list[i]), len(tag_pred))
-        l = labels.tolist()
-        y_true.append(l[0].split(' '))
+
+        #l = labels.tolist()
+        for t in tags:
+          if len(t) == 1:
+            tag = id2tag[t].item()
+          else: 
+            tag = [id2tag[q.item()] for q in t]
+          y_true.append(tag)
 
         # for l in labels:
         #   tag_true = extract_tags(l, id2tag)
@@ -435,26 +444,47 @@ for batch in tqdm(sorted_dlv):
 
 test_loss /= num_test_words
 KLD /= num_test_words 
- 
-#print("instance of test pred", test_pred[0])
+
+# print("instance of y_true", )
+# print("instance of test pred", test_pred[0])
 #print("len sent, len pred", len(test_pred[0][0]), len(test_pred[0][1]))
 
+#print("len word, tag, true, list", len(word_list), len(tag_list), len(y_true))
 for i in range(len(word_list)):
-  test_pred.append((word_list[i], tag_list[i]))
+  test_pred.append((word_list[i], tag_list[i], y_true[i]))
 
 # extract predictions from tuple (sentence, tags)
-y_pred = [j for _,j in test_pred] 
+y_pred = [j for _,j,_ in test_pred] 
+count = 0
+for i in y_true:
+  count += len(i)
+
+prop_dict = tag_ids
+for i in prop_dict:
+  prop_dict[i] == 0
 
 k=int(20) # Words to sample for each topic
 print("\n Compiling top {:.0f} words...".format(k))
-grand_total = [[] for topic in range(args.num_topic)]
+grand_total = [[]        for topic in range(args.num_topic)]
+props_list  = [prop_dict for topic in range(args.num_topic)]
 for inst in test_pred:
   sen_len = len(inst[0])
   for i in range(sen_len):
     word = inst[0][i]
     tag = inst[1][i]
+    true = inst[2][i]
     if word != PAD_TOKEN and word != EOS_TOKEN and word != SOS_TOKEN:
       grand_total[tag].append(word) # add word to list in index of its tag
+      #print("propos list", tag, props_list[tag])
+      props_list[tag][true] += 1
+
+print("grand_total", y_true[0][:10], y_true[1][:10])
+grand_total_lens = [len(i) for i in grand_total] 
+print(props_list)   
+for i in props_list:   
+  for key in i:   
+    i[key] /= grand_total_lens[i]   
+print(props_list)  
 
 topwords = []
 for i in range(args.num_topic):
