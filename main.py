@@ -467,6 +467,7 @@ k=int(20) # Words to sample for each topic
 print("\n Compiling top {:.0f} words...".format(k))
 grand_total = [[]        for topic in range(args.num_topic)]
 props_list  = [prop_dict for topic in range(args.num_topic)]
+print("test_pred sample", test_pred[:10])
 for inst in test_pred:
   sen_len = len(inst[0])
   for i in range(sen_len):
@@ -478,13 +479,18 @@ for inst in test_pred:
       #print("propos list", tag, props_list[tag])
       props_list[tag][true] += 1
 
-print("grand_total", y_true[0][:10], y_true[1][:10])
+#print("grand_total", y_true[0][:10], y_true[1][:10])
 grand_total_lens = [len(i) for i in grand_total] 
+print(grand_total_lens)
 print(props_list)   
-for i in props_list:   
-  for key in i:   
-    i[key] /= grand_total_lens[i]   
+for i in range(args.num_topic):   
+  for key in props_list[i]:   
+    props_list[i][key] /= grand_total_lens[i]   
 print(props_list)  
+
+summo = sum(grand_total_lens)
+grand_total_lens = [i/summo for i in grand_total_lens]
+print("Proportions of clustering:", grand_total_lens)
 
 topwords = []
 for i in range(args.num_topic):
