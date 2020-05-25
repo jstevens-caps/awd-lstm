@@ -459,15 +459,10 @@ count = 0
 for i in y_true:
   count += len(i)
 
-prop_dict = tag_ids
-for i in prop_dict:
-  prop_dict[i] == 0
-
 k=int(20) # Words to sample for each topic
 print("\n Compiling top {:.0f} words...".format(k))
-grand_total = [[]        for topic in range(args.num_topic)]
-props_list  = [prop_dict for topic in range(args.num_topic)]
-print("test_pred sample", test_pred[:10])
+grand_total = [[]                                           for topic in range(args.num_topic)]
+props_list  = [{'MISC':0, 'LOC':0, 'PER':0, 'ORG':0, 'O':0} for topic in range(args.num_topic)]
 for inst in test_pred:
   sen_len = len(inst[0])
   for i in range(sen_len):
@@ -479,23 +474,25 @@ for inst in test_pred:
       #print("propos list", tag, props_list[tag])
       props_list[tag][true] += 1
 
-#print("grand_total", y_true[0][:10], y_true[1][:10])
-grand_total_lens = [len(i) for i in grand_total] 
-print(grand_total_lens)
-print(props_list)   
+
+grand_total_lens = [len(i) for i in grand_total]   
 for i in range(args.num_topic):   
   for key in props_list[i]:   
     props_list[i][key] /= grand_total_lens[i]   
 print(props_list)  
 
+# [('MISC', 0.0231), ('LOC', 0.0119), ('PER', 0.0276), ('ORG', 0.0208), ('O', 0.9165)]
+print("Numer of tokens per cluster", grand_total_lens)
 summo = sum(grand_total_lens)
-grand_total_lens = [i/summo for i in grand_total_lens]
-print("Proportions of clustering:", grand_total_lens)
+lens_sum = [i/summo for i in grand_total_lens]
+lens_sum = [ '%.3f' % elem for elem in lens_sum ]
+print("Proportions of tokens clustered into each cluster:", lens_sum)
 
 topwords = []
 for i in range(args.num_topic):
   topwords.append(np.random.choice(grand_total[i], k))
   print("Top {:.0f} words of cluster indexed {:.0f}: {}".format(k, i, topwords[i]))
+  print("Proportions of labels present in cluster indexed {}: {}".format(i, props_list[i]))
 
 # def classific_report(y_true, y_pred): 
 #   if len(y_pred) == 1 or len(y_true) == 1: 
@@ -565,7 +562,10 @@ print("Saving loss data")
 pd.DataFrame(data={'train': train_losses, 'valid': valid_losses}).to_csv('{}/{}.csv'.format(path, args.output), index=False)
 with open('{}/{}.txt'.format(path, args.output), 'w') as f:
     f.write("Best loss {:.4f} | Best ppl {:.4f} | Epoch {} | Test loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(best_loss, np.exp(best_loss), best_epoch, test_loss, KLD, np.exp(test_loss), F1_full, co_score))
+    f.write("Numer of tokens per cluster".format(grand_total_lens))
+    f.write("Proportions of tokens clustered into each cluster: {}".format(lens_sum))
     for i in range(args.num_topic):
       f.write("Top {:.0f} words of cluster indexed {:.0f}: {}".format(k, i, topwords[i]))
+      f.write("Proportions of labels present in cluster indexed {}: {}".format(i, props_list[i]))
     
     
