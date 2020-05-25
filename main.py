@@ -86,8 +86,8 @@ parser.add_argument('-v', '--variance',         type=float, default=0.995)  # de
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
 parser.add_argument('--tokenized',  type=int, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
 parser.add_argument('--prior_train', action='store_true', help='whether we train the prior')
-parser.add_arguments('--kl_anneal', action='store_true', help='whether to anneal KL')
-parser.add_arguments('--margin', type=int, default=1, help='margin for KL anneal')
+parser.add_argument('--kl_anneal', action='store_true', help='whether to anneal KL')
+parser.add_argument('--margin', type=int, default=1, help='margin for KL anneal')
 
 args = parser.parse_args()
 
