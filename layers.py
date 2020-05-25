@@ -81,7 +81,7 @@ class AWDLSTMEncoder(nn.Module):
     """
     AWD-LSTM Encoder as proposed by Merity et al. (2017)
     """
-    def __init__(self, net_arch_TM, vocab_sz, emb_dim, hidden_dim, prior_train=False, anneal_KL=True, anneal_KL_margin=1, num_layers=1, emb_dp=0.1, weight_dp=0.5, input_dp=0.3, hidden_dp=0.3, tie_weights=True, padding_idx=1):
+    def __init__(self, net_arch_TM, vocab_sz, emb_dim, hidden_dim, prior_train=False, anneal_KL=False, anneal_KL_margin=1, num_layers=1, emb_dp=0.1, weight_dp=0.5, input_dp=0.3, hidden_dp=0.3, tie_weights=True, padding_idx=1):
         super(AWDLSTMEncoder, self).__init__()
         self.embeddings = nn.Embedding(vocab_sz, emb_dim, padding_idx=padding_idx)
         self.emb_dp = EmbeddingDropout(self.embeddings, emb_dp)
