@@ -168,7 +168,7 @@ net_arch.device_tn = device
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
-    encoder = AWDLSTMEncoder(net_arch, prior_train=args.prior_train, anneal_KL=args.anneal_kl, anneal_KL_margin=args.margin, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
+    encoder = AWDLSTMEncoder(net_arch, prior_train=args.prior_train, anneal_KL=args.kl_anneal, anneal_KL_margin=args.margin, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
                              num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp,
                              input_dp=args.input_dp, hidden_dp=args.hidden_dp, tie_weights=args.tie_weights)
 elif args.encoder == 'lstm':
