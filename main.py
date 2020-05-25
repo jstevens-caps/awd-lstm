@@ -86,6 +86,8 @@ parser.add_argument('-v', '--variance',         type=float, default=0.995)  # de
 parser.add_argument('--start',                  action='store_true')        # start training at invocation
 parser.add_argument('--tokenized',  type=int, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
 parser.add_argument('--prior_train', action='store_true', help='whether we train the prior')
+parser.add_arguments('--kl_anneal', action='store_true', help='whether to anneal KL')
+parser.add_arguments('--margin', type=int, default=1, help='margin for KL anneal')
 
 args = parser.parse_args()
 
@@ -166,7 +168,7 @@ net_arch.device_tn = device
 
 # Construct encoder
 if args.encoder == 'awd_lstm':
-    encoder = AWDLSTMEncoder(net_arch, prior_train=args.prior_train, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
+    encoder = AWDLSTMEncoder(net_arch, prior_train=args.prior_train, anneal_KL=args.anneal_kl, anneal_KL_margin=args.margin, vocab_sz=vocab_sz, emb_dim=args.emb_dim, hidden_dim=args.hidden_dim,
                              num_layers=args.num_layers, emb_dp=args.emb_dp, weight_dp=args.weight_dp,
                              input_dp=args.input_dp, hidden_dp=args.hidden_dp, tie_weights=args.tie_weights)
 elif args.encoder == 'lstm':
