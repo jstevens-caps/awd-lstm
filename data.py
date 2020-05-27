@@ -136,7 +136,7 @@ def from_data(input_file, vocab):
                     # print("word at idx in idx2word", vocab.idx2word[idx])
         return vocab
 
-class Corpus_tok(object):
+class Corpus_tok(object): # Corpus object for CONLL dataset with labels
     def __init__(self, path, train_file, valid_file, test_file, load_vocab=False, vocab_file='vocab.pth', max_sen_len=50):
         self.vocabulary = Vocabulary()
         if load_vocab: 
@@ -247,7 +247,7 @@ class Corpus_tok(object):
         # get words and label for a given instance index
         return self.data[idx], self.y[idx]
     
-class Corpus(object):
+class Corpus(object): # Corpus object for not tokenized text files
     def __init__(self, path, train_file, valid_file, test_file, load_vocab=False, vocab_file='vocab.pth'):
         self.vocabulary = Vocabulary()
         if load_vocab:
@@ -265,10 +265,15 @@ class Corpus(object):
         assert os.path.exists(path)
         # Add words to the dictionary
         with open(path, 'r', encoding="utf8") as f:
+            words = []
             for line in f:
-                words = line.split() + ['<eos>']
-                for word in words:
-                    self.vocabulary.add_word(word)
+                if line:
+                  (word, word_type, tag) = re.split(" ", line)
+                  words.append(word)
+                else:
+                  for word in words:
+                      self.vocabulary.add_word(word)
+                  words = []
 
     def tokenize(self, path, skip_dict=False):
         if not skip_dict:
@@ -277,12 +282,19 @@ class Corpus(object):
         # Tokenize file content
         with open(path, 'r', encoding="utf8") as f:
             idss = []
+            words = []
             for line in f:
-                words = line.split() + ['<eos>']
-                ids = []
-                for word in words:
-                    ids.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else '<unk>'])
-                idss.append(torch.tensor(ids).type(torch.int64))
+                if line: 
+                  (word, word_type, tag) = re.split(" ", line)
+                  words.append(word)
+                else:
+                  if len(sentence) > 0 and len(sentence) <= 50: 
+                    ids = []
+                    words.append([EOS_TOKEN])
+                    for word in words:
+                      ids.append(self.vocabulary.word2idx[word if word in self.vocabulary.vocab_set else '<unk>'])
+                    idss.append(torch.tensor(ids).type(torch.int64))
+                  words = []
             ids = torch.cat(idss)
 
         return ids
