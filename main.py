@@ -450,7 +450,7 @@ KLD /= num_test_words
 
 F1_full = 0
 co_score = 0
-if tokenized == 0:
+if args.tokenized == 0:
   print("Test Total Loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(test_loss, KLD, np.exp(test_loss), F1_full, co_score))
 
 # print("instance of y_true", )
