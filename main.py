@@ -395,6 +395,7 @@ for batch in tqdm(test_data):
                                   device) 
         else:
           x, y = batch
+          tags = torch.ones_like(x)
 
         #sentences = [corpus.vocabulary.idx2word[idx] for idx in sentence_idxs]
         num_test_words += x.size(0) 
@@ -446,6 +447,11 @@ for batch in tqdm(test_data):
 
 test_loss /= num_test_words
 KLD /= num_test_words 
+
+F1_full = 0
+co_score = 0
+if tokenized == 0:
+  print("Test Total Loss {:.4f} | Test KL {:.4f} | Test Ppl {:.4f} | Test F1 {:.4f} | Test TCHR {:.4f} ".format(test_loss, KLD, np.exp(test_loss), F1_full, co_score))
 
 # print("instance of y_true", )
 # print("instance of test pred", test_pred[0])
@@ -510,7 +516,7 @@ for i in range(args.num_topic):
 # Eval full dataset on F1, precision and recall
 # print("\nEvaluating on full test dataset")
 # print(classific_report(y_true, y_pred))
-F1_full = 0
+# F1_full = 0
 # F1_full = f1_score(y_true, y_pred)
 # print('F1 full: %.3f '%F1_full)
 
@@ -553,7 +559,6 @@ F1_full = 0
 
 # print("Estebandito get_topics: topics")
 
-co_score = 0
 #co_score = _get_coherence(best_components, n_components, corpus.vocabulary.idx2word, k=k, topics=args.num_topic)
 print("Mean Topic Coherence: ", co_score)
 
