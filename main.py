@@ -87,7 +87,7 @@ parser.add_argument('--start',                  action='store_true')        # st
 parser.add_argument('--tokenized',  type=int, default=1, choices=[0,1], help='whether the input files are allready tokenized') 
 parser.add_argument('--prior_train', action='store_true', help='whether we train the prior')
 parser.add_argument('--kl_anneal', action='store_true', help='whether to anneal KL')
-parser.add_argument('--margin', type=int, default=1, help='margin for KL anneal')
+parser.add_argument('--margin', type=float, default=1, help='margin for KL anneal')
 
 args = parser.parse_args()
 
@@ -474,7 +474,7 @@ stop_words = ['de', 'en', 'van', 'ik', 'te', 'dat', 'die', 'in', 'een', 'hij', '
               'zal', 'me', 'zij', 'nu', 'ge', 'geen', 'omdat', 'iets', 'worden', 'toch', 'al', 'waren', 'veel', 
               'meer', 'doen', 'toen', 'moet', 'ben', 'zonder', 'kan', 'hun', 'dus', 'alles', 'onder', 'ja', 'eens', 
               'hier', 'wie', 'werd', 'altijd', 'doch', 'wordt', 'lezen', 'kunnen', 'ons', 'zelf', 'tegen', 'na', 'reeds', 
-              'wil', 'kon', 'niets', 'uw', 'iemand', 'geweest', 'andere', '-DOCSTART-]
+              'wil', 'kon', 'niets', 'uw', 'iemand', 'geweest', 'andere', '-DOCSTART-', EOS_TOKEN, SOS_TOKEN, PAD_TOKEN]
 
 k=int(20) # Words to sample for each topic
 print("\n Compiling top {:.0f} words...".format(k))
@@ -486,7 +486,7 @@ for inst in test_pred:
     word = inst[0][i]
     tag = inst[1][i]
     true = inst[2][i]
-    if word != PAD_TOKEN and word != EOS_TOKEN and word != SOS_TOKEN and len(word) > 1 and not word in stop_words:
+    if len(word) > 1 and not word in stop_words:
       grand_total[tag].append(word) # add word to list in index of its tag
       #print("propos list", tag, props_list[tag])
       props_list[tag][true] += 1
